@@ -207,5 +207,63 @@ def main():
 def load_base_checkpoint(model, optimizer):
     start = time.time()
     filedir = args.save_dir
-    filepath = filedir + '/' + args.model + '_' + args.dataset + '_' + args.compressor + '_' + str(args.compressor_ratio) + '_' + str(args.resume-1) + '_0_full' + '.pth.tar'
-    if os.path.isfile(filepath):
+    # 保存格式: {save_dir}/{model}_{dataset}_{compressor}_{compressor_ratio}_{epoch}_{batch_idx}_full.pth.tar
+    pattern = r'{}_{}_{}_{}_([0-9]+)_([0-9]+)_full\.pth\.tar'.format(args.model, args.dataset, args.compressor, args.compressor_ratio)
+    files = os.listdir(filedir)
+    candidates = []
+    for f in files:
+        m = re.match(pattern, f)
+        if m:
+            epoch = int(m.group(1))
+            batch = int(m.group(2))
+            candidates.append((epoch, batch, f))
+    if not candidates:
+        raise ValueError("No full checkpoint found in {}".format(filedir))
+    # 选择 epoch 最大，若同 epoch 则选择 batch 最大
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    sel_epoch, sel_batch, sel_file = candidates[-1]
+    filepath = os.path.join(filedir, sel_file)
+    print("loading {}".format(filepath))
+    checkpoint = torch.load(filepath, map_location='cpu')
+
+    if hasattr(model, 'module'):
+        model.module.load_state_dict(checkpoint['model'])
+    else:
+        model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    # 更新 args.resume，使后续差分恢复使用正确基准
+    args.resume = sel_epoch + 1
+    end = time.time()
+    print("load base checkpoint takes {:.3f}s (epoch {}, batch {})".format(end - start, sel_epoch, sel_batch))
+    return model, optimizer
+
+def topk_decompress(values, indices, shape):
+    """
+    Decompress Top-K compressed gradients back to full gradient tensor.
+    """
+    tensor_decompressed = torch.zeros(shape).cuda().view(-1)
+    for idx, val in zip(indices, values):
+        tensor_decompressed = tensor_decompressed.scatter_add_(0, idx, val)
+    return tensor_decompressed.view(shape)
+
+def find_max():
+    """
+    Find the maximum iteration number of differential checkpoints.
+    """
+    files = os.listdir(args.save_dir)
+    if args.save_batch_freq > 1:
+        pattern = r'{}_{}_{}_{}_{}-(\d+)_batch{}\.pth\.tar'.format(args.model, args.dataset, args.compressor, args.compressor_ratio, args.resume-1, args.save_batch_freq)
+    else:
+        pattern = r'{}_{}_{}_{}_{}-(\d+)_batch1\.pth\.tar'.format(args.model, args.dataset, args.compressor, args.compressor_ratio, args.resume-1)
+    max_x = -1
+    for file in files:
+        match = re.match(pattern, file)
+        if match:
+            x = int(match.group(1))
+            if x > max_x:
+                max_x = x
+    if max_x != -1:
+        print("Max diff ckpt at epoch {}, iteration {}".format(args.resume, max_x))
+    else:
+        print("no diff ckpt found")
+    return max_x

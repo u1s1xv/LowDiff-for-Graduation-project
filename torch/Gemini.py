@@ -187,16 +187,20 @@ def snapshot_persist(queue, snapshot, persist):
         # Snapshot
         with snapshot:
             begin = time.time()
+            print("[CHECKPOINT] Snapshot: Moving iteration {} to CPU memory".format(i))
             data = _to_cpu(data)
             end = time.time()
             print("Snapshot {} takes {:.3f}".format(i, end - begin))
-        
+            print("[CHECKPOINT] Snapshot: Iteration {} now in CPU memory (not yet on disk)".format(i))
+
         # Persist
         with persist:
             begin = time.time()
+            print("[CHECKPOINT] Persist: Writing iteration {} to disk...".format(i))
             torch.save(data, filename)
             end = time.time()
             print("Persist {} takes {:.3f}".format(i, end - begin))
+            print("[CHECKPOINT] Persist: Written to disk at: {}".format(os.path.abspath(filename)))
             
     return
     

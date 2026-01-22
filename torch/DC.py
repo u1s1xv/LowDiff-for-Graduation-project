@@ -1,3 +1,4 @@
+import os
 import time
 import copy
 import argparse
@@ -29,6 +30,7 @@ parser.add_argument("--compressor", default="topk", type=str, help='which compre
 parser.add_argument("--compressor_ratio", default=0.01, type=float, help='choose compress ratio for compressor')
 parser.add_argument("--save-dir", default='/data/lowdiff', type=str, help='directory to save checkpoints')
 parser.add_argument("--freq", default=0, type=int, help='how many iteration to save a full checkpoint')
+parser.add_argument("--resume", type=int, default=0, help='resume from checkpoint (epoch number)')
 
 args = parser.parse_args()
 
@@ -85,7 +87,15 @@ def main():
     
     model.cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    
+
+    # Optionally resume from a checkpoint at rank 0
+    if args.resume and dist.get_rank() == 0:
+        start_resume = time.time()
+        model, optimizer = load_base_checkpoint(model, optimizer)
+        model, optimizer = load_differential_checkpoint(model, optimizer)
+        end_resume = time.time()
+        print("resume takes {:.3f}s".format(end_resume - start_resume))
+
     # Define the configuration dictionary directly in code
     ds_config = {
         "train_batch_size": args.batch_size,
@@ -114,31 +124,47 @@ def main():
 
             if dist.get_rank() == 0 and args.freq > 0 and batch_idx % args.freq == 0:
                         begin_full = time.time()
+                        full_checkpoint_path = '{}/{}_full_optimizer.pth.tar'.format(args.save_dir,args.model)
+                        print("[CHECKPOINT] Before torch.save() - Full checkpoint")
                         torch.save({
                             'epoch': epoch + 1,
                             'model': model.module.state_dict(),
                             'optimizer' : optimizer.state_dict(),
-                        }, '{}/{}_full_optimizer.pth.tar'.format(args.save_dir,args.model))
+                        }, full_checkpoint_path)
                         end_full = time.time()
-                        print("base checkpoint takes {:.3f}s".format(end_full - begin_full))
-                        
-            if batch_idx !=0 and dist.get_rank() == 0: 
+                        print("[CHECKPOINT] After torch.save() - took {:.3f}s".format(end_full - begin_full))
+                        # Check if file exists on disk immediately
+                        if os.path.exists(full_checkpoint_path):
+                            file_size = os.path.getsize(full_checkpoint_path)
+                            print("[CHECKPOINT] File FOUND on disk: {} ({:.2f} MB)".format(os.path.abspath(full_checkpoint_path), file_size/1024/1024))
+                        else:
+                            print("[CHECKPOINT] File NOT FOUND on disk yet: {}".format(os.path.abspath(full_checkpoint_path)))
+
+            if batch_idx !=0 and dist.get_rank() == 0:
                 begin = time.time()
                 compress_diff = DC_with_compress(model.module,prev_model)
-            
+
             if dist.get_rank() == 0:
                 prev_model = copy.deepcopy(model.module).cpu()
                 # prev_model = copy.deepcopy(model.module)
-            
-            if batch_idx !=0 and dist.get_rank() == 0: 
+
+            if batch_idx !=0 and dist.get_rank() == 0:
                 end = time.time()
                 print("compress model takes {:.3f}s".format(end - begin))
-                
-            if batch_idx !=0 and dist.get_rank() == 0: 
+
+            if batch_idx !=0 and dist.get_rank() == 0:
                 begin = time.time()
-                torch.save((compress_diff,model.optimizer.state_dict()), '{}/{}_diff.pth.tar'.format(args.save_dir,args.model))
+                diff_checkpoint_path = '{}/{}_diff.pth.tar'.format(args.save_dir,args.model)
+                print("[CHECKPOINT] Before torch.save() - Differential checkpoint")
+                torch.save((compress_diff,model.optimizer.state_dict()), diff_checkpoint_path)
                 end = time.time()
-                print("save diff takes {:.3f}s".format(end - begin))
+                print("[CHECKPOINT] After torch.save() - took {:.3f}s".format(end - begin))
+                # Check if file exists on disk immediately
+                if os.path.exists(diff_checkpoint_path):
+                    file_size = os.path.getsize(diff_checkpoint_path)
+                    print("[CHECKPOINT] File FOUND on disk: {} ({:.2f} MB)".format(os.path.abspath(diff_checkpoint_path), file_size/1024/1024))
+                else:
+                    print("[CHECKPOINT] File NOT FOUND on disk yet: {}".format(os.path.abspath(diff_checkpoint_path)))
 
         print(f"Epoch {epoch} completed.")
     
@@ -194,12 +220,12 @@ def _to_cuda(data):
 
 def DC_with_compress(model_a, model_b):
     model_b = model_b.cuda()
-    
+
     compressed_data = {
         'model': {},
         'optimizer': {}
     }
-    
+
     for (name, param_a) in model_a.state_dict().items():
         param_b = model_b.state_dict()[name]
         if torch.is_tensor(param_a):
@@ -212,6 +238,60 @@ def DC_with_compress(model_a, model_b):
             }
 
     return compressed_data
-    
+
+def load_base_checkpoint(model, optimizer):
+    """
+    Load the base full checkpoint.
+    """
+    start = time.time()
+    filedir = args.save_dir
+    filepath = filedir + '/' + args.model + '_full_optimizer.pth.tar'
+    if os.path.isfile(filepath):
+        print("loading {}".format(filepath))
+        checkpoint = torch.load(filepath)
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        end = time.time()
+        print("load base checkpoint takes {:.3f}s".format(end - start))
+        return model, optimizer
+    else:
+        raise ValueError("No checkpoint found at {}".format(filepath))
+
+def load_differential_checkpoint(model, optimizer):
+    """
+    Load and apply differential checkpoints.
+    """
+    start = time.time()
+    filedir = args.save_dir
+    filepath = filedir + '/' + args.model + '_diff.pth.tar'
+
+    if os.path.isfile(filepath):
+        print("loading differential checkpoint: {}".format(filepath))
+        diff_data, optimizer_state = torch.load(filepath)
+
+        # Apply differential checkpoint to model
+        model_state_dict = model.state_dict()
+        for name, diff_info in diff_data['model'].items():
+            if name in model_state_dict:
+                # Decompress the diff
+                diff_tensor = topk_decompress(
+                    diff_info['values'],
+                    diff_info['indices'],
+                    diff_info['shape']
+                )
+                # Apply the diff to current model state
+                model_state_dict[name] = model_state_dict[name] + diff_tensor
+
+        model.load_state_dict(model_state_dict)
+        optimizer.load_state_dict(optimizer_state)
+
+        end = time.time()
+        print("load differential checkpoint takes {:.3f}s".format(end - start))
+        return model, optimizer
+    else:
+        print("No differential checkpoint found, using base checkpoint only")
+        return model, optimizer
+
 if __name__ == '__main__':
     main()
+
