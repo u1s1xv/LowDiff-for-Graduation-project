@@ -1,6 +1,9 @@
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent
+sys.path.append(str(project_root))
 import time
 import argparse
 import torch
@@ -8,11 +11,6 @@ import torch.nn as nn
 import torch.optim as optim
 import deepspeed
 from deepspeed import comm as dist
-import sys
-from pathlib import Path
-current_dir = Path(__file__).resolve().parent
-project_root = current_dir.parent
-sys.path.append(str(project_root))
 from communicator.lowdiff import Communicator
 import re
 from torch.utils.data import DataLoader, DistributedSampler
@@ -172,8 +170,6 @@ def main():
         print(f"Last trained batch: {last_trained_batch}")
         print(f"Training will resume from epoch {resume_epoch}, batch {last_trained_batch + 1}")
 
-    model.cuda()
-    
     # Initialize DeepSpeed
     deepspeed.enable_backward_allreduce = False
     
@@ -280,11 +276,91 @@ def load_base_checkpoint(model, optimizer):
 def topk_decompress(values, indices, shape):
     """
     Decompress Top-K compressed gradients back to full gradient tensor.
+    Handles both single tensor and list of tensors (multi-GPU case).
     """
     tensor_decompressed = torch.zeros(shape).cuda().view(-1)
-    for idx, val in zip(indices, values):
-        tensor_decompressed = tensor_decompressed.scatter_add_(0, idx, val)
+
+    # Handle list input (multi-GPU case)
+    if isinstance(values, list):
+        for idx_tensor, val_tensor in zip(indices, values):
+            idx_tensor = idx_tensor.cuda() if not idx_tensor.is_cuda else idx_tensor
+            val_tensor = val_tensor.cuda() if not val_tensor.is_cuda else val_tensor
+            tensor_decompressed.scatter_add_(0, idx_tensor, val_tensor)
+    else:
+        # Handle single tensor input
+        values = values.cuda() if not values.is_cuda else values
+        indices = indices.cuda() if not indices.is_cuda else indices
+        tensor_decompressed.scatter_add_(0, indices, values)
+
     return tensor_decompressed.view(shape)
+
+def tree_merge_checkpoints(diff_data):
+    """
+    Merge differential checkpoints using tree-based strategy.
+    Returns the merged checkpoint data and merge time.
+    """
+    merge_start = time.time()
+    current_level = sorted(diff_data.keys()) if isinstance(list(diff_data.keys())[0], int) else list(diff_data.keys())
+    merge_round = 0
+
+    while len(current_level) > 1:
+        merge_round += 1
+        next_level = []
+        for i in range(0, len(current_level), 2):
+            if i + 1 < len(current_level):
+                ckpt1_idx = current_level[i]
+                ckpt2_idx = current_level[i + 1]
+                merged_data = {}
+                for key in diff_data[ckpt1_idx].keys():
+                    tensor1 = topk_decompress(
+                        diff_data[ckpt1_idx][key]['values'],
+                        diff_data[ckpt1_idx][key]['indices'],
+                        diff_data[ckpt1_idx][key]['shape']
+                    )
+                    tensor2 = topk_decompress(
+                        diff_data[ckpt2_idx][key]['values'],
+                        diff_data[ckpt2_idx][key]['indices'],
+                        diff_data[ckpt2_idx][key]['shape']
+                    )
+                    merged_tensor = tensor1 + tensor2
+                    flat_tensor = merged_tensor.view(-1)
+                    k = int(flat_tensor.numel() * args.compressor_ratio)
+                    values, indices = torch.topk(flat_tensor.abs(), k)
+                    values = flat_tensor[indices]
+                    merged_data[key] = {
+                        'values': values,
+                        'indices': indices,
+                        'shape': merged_tensor.shape
+                    }
+                merged_idx = f"merged_{ckpt1_idx}_{ckpt2_idx}"
+                diff_data[merged_idx] = merged_data
+                next_level.append(merged_idx)
+                del diff_data[ckpt1_idx]
+                del diff_data[ckpt2_idx]
+            else:
+                next_level.append(current_level[i])
+        current_level = next_level
+
+    merge_end = time.time()
+    merge_time = merge_end - merge_start
+    final_merged_idx = current_level[0]
+    return diff_data[final_merged_idx], merge_time, merge_round
+
+def apply_merged_checkpoint(model, optimizer, merged_data):
+    """
+    Apply merged checkpoint to model and optimizer.
+    """
+    _parameter_names = {name: param for name, param in model.named_parameters()}
+    for key in merged_data.keys():
+        tensor = topk_decompress(
+            merged_data[key]['values'],
+            merged_data[key]['indices'],
+            merged_data[key]['shape']
+        )
+        param = _parameter_names.get(key)
+        if param is not None:
+            param.grad = tensor
+    optimizer.step()
 
 def find_max(base_batch):  # 新增参数：base_batch（基准检查点的 batch 编号）
     """
@@ -323,6 +399,94 @@ def find_max(base_batch):  # 新增参数：base_batch（基准检查点的 batc
         print("No diff ckpt found after base batch {}".format(base_batch))
     
     return max_x
+
+def load_differential_checkpoint(model, optimizer, base_batch):
+    """
+    Load differential checkpoints using tree-based parallel merging strategy.
+    """
+    begin = time.time()
+    filedir = args.save_dir
+    iterations = find_max(base_batch)
+
+    if iterations == -1:
+        return model, optimizer, base_batch
+
+    diff_checkpoints = list(range(base_batch + 1, iterations + 1))
+    num_diffs = len(diff_checkpoints)
+    print(f"Loading {num_diffs} differential checkpoints (batch {base_batch + 1} to {iterations})")
+
+    diff_data = {}
+
+    # Load all differential checkpoints
+    load_start = time.time()
+    for i in diff_checkpoints:
+        filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch1.pth.tar'.format(
+            args.model, args.dataset, args.compressor, args.compressor_ratio,
+            args.resume-1, i
+        )
+        if not os.path.exists(filepath):
+            continue
+        diff_data[i] = torch.load(filepath, map_location='cpu')
+    load_end = time.time()
+    print(f"Loaded {len(diff_data)} checkpoints in {load_end - load_start:.3f}s")
+
+    # Tree-based merging
+    merged_data, merge_time, merge_round = tree_merge_checkpoints(diff_data)
+    print(f"Tree-based merging completed in {merge_time:.3f}s ({merge_round} rounds)")
+
+    # Apply merged checkpoint to model
+    apply_merged_checkpoint(model, optimizer, merged_data)
+
+    end = time.time()
+    print("parallel recovery takes {:.3f}s".format(end - begin))
+    return model, optimizer, iterations
+
+def load_batch_differential_checkpoint(model, optimizer, base_batch):
+    """
+    Load batched differential checkpoints using tree-based parallel merging strategy.
+    """
+    begin = time.time()
+    filedir = args.save_dir
+    iterations = find_max(base_batch)
+
+    if iterations == -1:
+        return model, optimizer, base_batch
+
+    first_batch = ((base_batch // args.save_batch_freq) + 1) * args.save_batch_freq - 1
+    diff_data = {}
+
+    # Load all batch differential checkpoints
+    load_start = time.time()
+    batch_files_loaded = 0
+    for i in range(first_batch, iterations + 1, args.save_batch_freq):
+        filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch{}.pth.tar'.format(
+            args.model, args.dataset, args.compressor, args.compressor_ratio,
+            args.resume-1, i, args.save_batch_freq
+        )
+        if not os.path.exists(filepath):
+            continue
+        tensor_compressed = torch.load(filepath, map_location='cpu')
+        batch_files_loaded += 1
+        for j in range(i - args.save_batch_freq + 1, i + 1):
+            if j <= base_batch or j not in tensor_compressed:
+                continue
+            diff_data[j] = tensor_compressed[j]
+    load_end = time.time()
+    print(f"Loaded {batch_files_loaded} batch files containing {len(diff_data)} checkpoints in {load_end - load_start:.3f}s")
+
+    if len(diff_data) == 0:
+        return model, optimizer, base_batch
+
+    # Tree-based merging
+    merged_data, merge_time, merge_round = tree_merge_checkpoints(diff_data)
+    print(f"Tree-based merging completed in {merge_time:.3f}s ({merge_round} rounds)")
+
+    # Apply merged checkpoint to model
+    apply_merged_checkpoint(model, optimizer, merged_data)
+
+    end = time.time()
+    print("parallel batch recovery takes {:.3f}s".format(end - begin))
+    return model, optimizer, iterations
 
 if __name__ == '__main__':
     main()
