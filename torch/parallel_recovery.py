@@ -6,21 +6,20 @@ project_root = current_dir.parent
 sys.path.append(str(project_root))
 import time
 import argparse
+import re
 import torch
-import torch.nn as nn
-import torch.optim as optim
+import torch.multiprocessing as mp
+from torch.utils.data import DataLoader, DistributedSampler
 import deepspeed
 from deepspeed import comm as dist
-from communicator.lowdiff import Communicator
-import re
-from torch.utils.data import DataLoader, DistributedSampler
-from datasets import load_dataset
 from transformers import (
     GPT2LMHeadModel,
     GPT2Tokenizer,
     DataCollatorForLanguageModeling,
     set_seed
 )
+from datasets import load_dataset
+from communicator.lowdiff import Communicator
 
 # Argument parsing
 parser = argparse.ArgumentParser(description='DeepSpeed NLP Training with TopK Compression')
@@ -296,50 +295,102 @@ def topk_decompress(values, indices, shape):
 
 def tree_merge_checkpoints(diff_data):
     """
-    Merge differential checkpoints using tree-based strategy.
-    Returns the merged checkpoint data and merge time.
+    Merge differential checkpoints using tree-based parallel strategy.
+    Uses multiprocessing to parallelize merge operations within each round.
+
+    Returns:
+        tuple: (merged_data, merge_time, merge_round)
     """
     merge_start = time.time()
     current_level = sorted(diff_data.keys()) if isinstance(list(diff_data.keys())[0], int) else list(diff_data.keys())
     merge_round = 0
 
-    while len(current_level) > 1:
-        merge_round += 1
-        next_level = []
-        for i in range(0, len(current_level), 2):
-            if i + 1 < len(current_level):
-                ckpt1_idx = current_level[i]
-                ckpt2_idx = current_level[i + 1]
-                merged_data = {}
-                for key in diff_data[ckpt1_idx].keys():
-                    tensor1 = topk_decompress(
-                        diff_data[ckpt1_idx][key]['values'],
-                        diff_data[ckpt1_idx][key]['indices'],
-                        diff_data[ckpt1_idx][key]['shape']
-                    )
-                    tensor2 = topk_decompress(
-                        diff_data[ckpt2_idx][key]['values'],
-                        diff_data[ckpt2_idx][key]['indices'],
-                        diff_data[ckpt2_idx][key]['shape']
-                    )
-                    merged_tensor = tensor1 + tensor2
-                    flat_tensor = merged_tensor.view(-1)
-                    k = int(flat_tensor.numel() * args.compressor_ratio)
-                    values, indices = torch.topk(flat_tensor.abs(), k)
-                    values = flat_tensor[indices]
-                    merged_data[key] = {
-                        'values': values,
-                        'indices': indices,
-                        'shape': merged_tensor.shape
-                    }
-                merged_idx = f"merged_{ckpt1_idx}_{ckpt2_idx}"
-                diff_data[merged_idx] = merged_data
-                next_level.append(merged_idx)
-                del diff_data[ckpt1_idx]
-                del diff_data[ckpt2_idx]
-            else:
-                next_level.append(current_level[i])
-        current_level = next_level
+    # Determine number of worker processes
+    # Use half of CPU cores, but cap at 8 to avoid excessive overhead
+    num_workers = min(mp.cpu_count() // 2, 8)
+    num_workers = max(num_workers, 1)  # At least 1 worker
+
+    # Get number of available GPUs
+    num_gpus = torch.cuda.device_count()
+    num_gpus = max(num_gpus, 1)  # At least 1 GPU
+
+    print(f"Using {num_workers} worker processes and {num_gpus} GPUs for parallel merging (IPC mode)")
+
+    # Import queue worker from lightweight module
+    from communicator.merge_worker import queue_worker
+
+    # Create task and result queues for IPC
+    ctx = mp.get_context('spawn')
+    task_queue = ctx.Queue()
+    result_queue = ctx.Queue()
+
+    # Start worker processes
+    workers = []
+    for i in range(num_workers):
+        device_id = i % num_gpus
+        p = ctx.Process(target=queue_worker, args=(task_queue, result_queue, device_id))
+        p.start()
+        workers.append(p)
+
+    try:
+        while len(current_level) > 1:
+            merge_round += 1
+            next_level = []
+
+            # Collect merge tasks for this round
+            merge_tasks = []
+            for i in range(0, len(current_level), 2):
+                if i + 1 < len(current_level):
+                    ckpt1_idx = current_level[i]
+                    ckpt2_idx = current_level[i + 1]
+                    merge_tasks.append((
+                        ckpt1_idx,
+                        ckpt2_idx,
+                        diff_data[ckpt1_idx],
+                        diff_data[ckpt2_idx]
+                    ))
+                else:
+                    # Odd number of checkpoints, pass through to next level
+                    next_level.append(current_level[i])
+
+            # Execute merge tasks in parallel via queue
+            if len(merge_tasks) > 0:
+                round_start = time.time()
+
+                # Send tasks to workers via queue
+                for idx, (ckpt1_idx, ckpt2_idx, ckpt1_data, ckpt2_data) in enumerate(merge_tasks):
+                    task_queue.put((idx, ckpt1_data, ckpt2_data, args.compressor_ratio))
+
+                # Collect results from workers
+                results = {}
+                for _ in range(len(merge_tasks)):
+                    task_id, merged_data = result_queue.get()
+                    results[task_id] = merged_data
+
+                round_end = time.time()
+
+                # Update diff_data with merged results
+                for idx, (ckpt1_idx, ckpt2_idx, _, _) in enumerate(merge_tasks):
+                    merged_idx = f"merged_{ckpt1_idx}_{ckpt2_idx}"
+                    diff_data[merged_idx] = results[idx]
+                    next_level.append(merged_idx)
+
+                    # Delete merged checkpoints to free memory
+                    del diff_data[ckpt1_idx]
+                    del diff_data[ckpt2_idx]
+
+                print(f"Round {merge_round}: merged {len(merge_tasks)} pairs in {round_end - round_start:.3f}s, {len(next_level)} checkpoints remaining")
+
+            current_level = next_level
+
+    finally:
+        # Send termination signals to workers
+        for _ in range(num_workers):
+            task_queue.put(None)
+
+        # Wait for all workers to finish
+        for p in workers:
+            p.join()
 
     merge_end = time.time()
     merge_time = merge_end - merge_start

@@ -337,8 +337,8 @@ def load_differential_checkpoint(model, optimizer, base_batch):  # 新增参数
     iterations = find_max(base_batch)  # 传递 base_batch 参数
     recovery_times = []
 
-    # 关键修改：从 base_batch + 1 开始回放
-    for i in range(base_batch + 1, iterations + 1):  # 注意：iterations + 1 确保包含最后一个
+    # 从 base_batch + 1 开始回放
+    for i in range(base_batch + 1, iterations + 1):  # iterations + 1 确保包含最后一个
         begin = time.time()
         filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch1.pth.tar'.format(
             args.model, args.dataset, args.compressor, args.compressor_ratio, 
@@ -367,9 +367,11 @@ def load_differential_checkpoint(model, optimizer, base_batch):  # 新增参数
 
     # Log recovery times
     if recovery_times:
+        total_recovery_time = sum(recovery_times)
         print(f"Recovery times: min={min(recovery_times):.6f}s, "
               f"max={max(recovery_times):.6f}s, "
-              f"avg={sum(recovery_times)/len(recovery_times):.6f}s")
+              f"avg={total_recovery_time/len(recovery_times):.6f}s, "
+              f"total={total_recovery_time:.6f}s")
 
     # 返回最后恢复到的 batch 编号
     last_batch = iterations if iterations != -1 else base_batch
@@ -434,9 +436,11 @@ def load_batch_differential_checkpoint(model, optimizer, base_batch):  # 新增�
 
     # Log recovery times
     if recovery_times:
+        total_recovery_time = sum(recovery_times)
         print(f"Batch recovery times: min={min(recovery_times):.6f}s, "
               f"max={max(recovery_times):.6f}s, "
-              f"avg={sum(recovery_times)/len(recovery_times):.6f}s")
+              f"avg={total_recovery_time/len(recovery_times):.6f}s, "
+              f"total={total_recovery_time:.6f}s")
 
     # 返回最后恢复到的 batch 编号
     last_batch = iterations if iterations != -1 else base_batch
