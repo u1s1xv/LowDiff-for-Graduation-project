@@ -1,9 +1,9 @@
 #!/bin/zsh
 
 ################################################################################
-# LowDiff Training Launcher (With Compression & Differential Checkpoints)
-# Purpose: Run GPT-2 training with gradient compression and differential checkpoints
-# Usage: bash scripts/gpt_lowdiff.sh
+# Baseline Training Launcher (No Compression, No Checkpoints)
+# Purpose: Run standard GPT-2 training for performance comparison with LowDiff
+# Usage: bash scripts/baseline_lowdiff.sh
 ################################################################################
 
 # Set environment variables
@@ -20,29 +20,26 @@ export TRANSFORMERS_CACHE=/mnt/newdisk/xiekunpeng/.cache/huggingface/transformer
 
 # Training parameters
 DATASET=wikitext-2
-MODEL=gpt2
-EPOCHS=10
+MODEL=gpt2-large
+EPOCHS=1
 BATCH_SIZE=4
-COMPRESSOR=topk
-COMPRESSOR_RATIO=0.05  
-FREQ=0
-SAVE_BATCH_FREQ=20
-SAVE_DIR=/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff
-RESUME=0
 NUM_GPUS=4
+
+# Save directory (same as gpt_lowdiff.sh)
+SAVE_DIR=/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff
 
 # Create save directory if it doesn't exist
 mkdir -p $SAVE_DIR
 
-# Log file
-LOG_FILE=$SAVE_DIR/gpt_lowdiff_$(date +%Y%m%d_%H%M%S).log
+# Log file (same naming convention as gpt_lowdiff.sh)
+LOG_FILE=$SAVE_DIR/baseline_lowdiff_$(date +%Y%m%d_%H%M%S).log
 
 # Initialize log file with header
 {
     echo "======================================================================"
-    echo "LOWDIFF TRAINING LOG"
+    echo "BASELINE TRAINING LOG"
     echo "======================================================================"
-    echo "Script: gpt_lowdiff.sh"
+    echo "Script: baseline_lowdiff.sh"
     echo "Start Time: $(date '+%Y-%m-%d %H:%M:%S')"
     echo "Hostname: $(hostname)"
     echo "User: $(whoami)"
@@ -58,7 +55,7 @@ log() {
 
 # Display training configuration
 log "======================================================================"
-log "LowDiff Training (With Compression & Differential Checkpoints)"
+log "Baseline Training (No Compression, No Checkpoints)"
 log "======================================================================"
 log "Dataset: $DATASET"
 log "Model: $MODEL"
@@ -70,11 +67,10 @@ log "Save Directory: $SAVE_DIR"
 log "Log File: $LOG_FILE"
 log "======================================================================"
 log ""
-log "LowDiff Configuration:"
-log "  - Compressor: $COMPRESSOR"
-log "  - Compression Ratio: $COMPRESSOR_RATIO"
-log "  - Full Checkpoint Frequency: every $FREQ iterations"
-log "  - Differential Checkpoint Frequency: every $SAVE_BATCH_FREQ iterations"
+log "NOTE: This is a BASELINE training WITHOUT:"
+log "  - Gradient compression (no topk_compress)"
+log "  - Checkpoint saving (no Communicator)"
+log "  - Differential checkpoints"
 log ""
 log "Starting training at $(date)..."
 log "======================================================================"
@@ -101,17 +97,11 @@ log ""
 } >> $LOG_FILE
 
 # Distributed training with DeepSpeed
-deepspeed --num_gpus=$NUM_GPUS ./torch/GPT.py\
+deepspeed --num_gpus=$NUM_GPUS ./torch/baseline_training.py \
   --dataset $DATASET \
   --model $MODEL \
   --epochs $EPOCHS \
   --batch-size $BATCH_SIZE \
-  --compressor $COMPRESSOR \
-  --compressor_ratio $COMPRESSOR_RATIO \
-  --freq $FREQ \
-  --save-batch-freq $SAVE_BATCH_FREQ \
-  --save-dir $SAVE_DIR \
-  --resume $RESUME \
   2>&1 | tee -a $LOG_FILE
 
 # Check exit status
@@ -120,7 +110,7 @@ EXIT_CODE=$?
 echo ""
 echo "======================================================================"
 if [ $EXIT_CODE -eq 0 ]; then
-    echo "✅ LowDiff training completed successfully at $(date)"
+    echo "✅ Baseline training completed successfully at $(date)"
     echo "======================================================================"
     echo ""
     echo "Performance Summary:"
@@ -130,12 +120,12 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "To view training statistics:"
     echo "  grep 'TRAINING COMPLETED' -A 20 $LOG_FILE"
     echo ""
-    echo "To compare with baseline training:"
-    echo "  1. Run baseline: bash scripts/baseline_lowdiff.sh"
+    echo "To compare with LowDiff training:"
+    echo "  1. Run LowDiff: bash scripts/gpt_lowdiff.sh"
     echo "  2. Compare logs in: $SAVE_DIR"
     echo "======================================================================"
 else
-    echo "❌ LowDiff training failed with exit code $EXIT_CODE"
+    echo "❌ Baseline training failed with exit code $EXIT_CODE"
     echo "======================================================================"
     echo ""
     echo "Troubleshooting:"
@@ -158,3 +148,4 @@ fi
     echo "End Time: $(date '+%Y-%m-%d %H:%M:%S')"
     echo "======================================================================"
 } >> $LOG_FILE
+

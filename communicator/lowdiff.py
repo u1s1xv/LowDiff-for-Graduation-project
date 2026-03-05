@@ -9,30 +9,41 @@ import datetime
 import time
 
 class Communicator:
-    def __init__(self, model, k=0.01, num_threads=None, save_batch_freq=1):
+    def __init__(self, model, k=0.01, num_threads=None, save_batch_freq=1, use_error_feedback=True):
         """
         Initialize the Communicator for Top-K gradient compression with async all_gather.
 
         Args:
             model (nn.Module): The PyTorch model.
             k (float): Compression ratio (top-k percentage of gradient to keep).
-            num_threads (int, optional): Number of threads for decompression. 
+            num_threads (int, optional): Number of threads for decompression.
                                           Defaults to half of CPU cores.
-            batch (int): In-memory batching frequency for saving compressed gradients.
+            save_batch_freq (int): In-memory batching frequency for saving compressed gradients.
+            use_error_feedback (bool): Whether to use error feedback mechanism for gradient compensation.
         """
         self.k = k
         self.model = model
         self.compression_data = {}  # Store async work handles and gathered results
-        
+
+        # Error Feedback Mechanism
+        self.use_error_feedback = use_error_feedback
+        self.error_feedback = {}  # Store error tensors for each parameter
+        self.error_clipped_count = 0  # Track how many times error was clipped
+        self.error_reset_count = 0  # Track how many times error was reset due to NaN/Inf
+
         # Get the number of available CPU threads (default to half of total cores, max 32)
         if num_threads is None:
             num_threads = int(os.cpu_count() / 2)
-        
+
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_threads)  # Thread pool
         self.param_dict = dict(self.model.named_parameters())
-        
+
         print(f"Using {num_threads} threads for gradient decompression.")
-        
+        if self.use_error_feedback:
+            print("Error Feedback mechanism is ENABLED.")
+        else:
+            print("Error Feedback mechanism is DISABLED.")
+
         if dist.get_rank() == 0:
             self.save_batch_freq = save_batch_freq
             self.diff_ckpt = {}
@@ -56,30 +67,48 @@ class Communicator:
         
     def async_send(self, grad, param_name):
         """
-        Hook function for gradient compression.
+        Hook function for gradient compression with error feedback.
         """
         world_size = dist.get_world_size()
-        indices, values = self.topk_compress(grad)
+
+        # 保存原始梯度用于自适应裁剪
+        original_grad = grad.clone() if self.use_error_feedback else None
+
+        # Error Feedback: Compensate gradient with accumulated error
+        if self.use_error_feedback:
+            if param_name not in self.error_feedback:
+                # Initialize error buffer for this parameter
+                self.error_feedback[param_name] = torch.zeros_like(grad)
+
+            # Compensate gradient: g'_t = g_t + e_{t-1}
+            compensated_grad = grad + self.error_feedback[param_name]
+        else:
+            compensated_grad = grad
+
+        # Compress the compensated gradient
+        indices, values = self.topk_compress(compensated_grad)
 
         gathered_indices = [torch.zeros_like(indices) for _ in range(world_size)]
         gathered_values = [torch.zeros_like(values) for _ in range(world_size)]
-        
+
         # Perform async all_gather
         work_indices = dist.all_gather(gathered_indices, indices, async_op=True)
         work_values = dist.all_gather(gathered_values, values, async_op=True)
-        
+
         # Store work handles and gathered buffers
         self.compression_data[param_name] = {
             "work_indices": work_indices,
             "work_values": work_values,
             "gathered_indices": gathered_indices,
             "gathered_values": gathered_values,
-            "grad_shape": grad.shape
+            "grad_shape": grad.shape,
+            "original_grad": original_grad,
+            "compensated_grad": compensated_grad.clone() if self.use_error_feedback else None
         }
-        
+
         if dist.get_rank() == 0:
             self.diff_ckpt[param_name] = {'values': gathered_values, 'indices': gathered_indices, 'shape': grad.shape}
-        
+
         return None  # Do not modify grad immediately
     
     def register_hooks(self):
@@ -92,9 +121,9 @@ class Communicator:
     
     def decompress_save(self, diff, filename, i):
         """
-        Parallel gradient restoration.
+        Parallel gradient restoration with error feedback update.
         """
-        def process_gradient(param, data):
+        def process_gradient(param_name, param, data):
             data["work_indices"].wait()
             data["work_values"].wait()
 
@@ -103,21 +132,99 @@ class Communicator:
             for indices, values in zip(data["gathered_indices"], data["gathered_values"]):
                 restored_grad.scatter_add_(0, indices, values)  # This remains a CPU/GPU task
 
-            param.grad = restored_grad.view(data["grad_shape"])  # Direct assignment
+            restored_grad = restored_grad.view(data["grad_shape"])
+
+            # Error Feedback: Update error buffer with momentum
+            # e_t = compensated_grad - restored_grad
+            if self.use_error_feedback and data["compensated_grad"] is not None:
+                error = data["compensated_grad"] - restored_grad
+
+                # Critical: Check for NaN/Inf and clip error to prevent numerical instability
+                if torch.isnan(error).any() or torch.isinf(error).any():
+                    error = torch.zeros_like(error)
+                    self.error_reset_count += 1
+                else:
+                    # 自适应误差裁剪
+                    error_norm = error.norm()
+                    grad_norm = data["original_grad"].norm() if data["original_grad"] is not None else restored_grad.norm()
+                    max_error_norm = max(10.0, grad_norm.item() * 0.5)
+                    if error_norm > max_error_norm:
+                        error = error * (max_error_norm / error_norm)
+                        self.error_clipped_count += 1
+
+                # 误差动量：加速补偿收敛
+                momentum = 0.9
+                if param_name in self.error_feedback:
+                    error = momentum * self.error_feedback[param_name] + error
+
+                self.error_feedback[param_name] = error.detach()
+
+            param.grad = restored_grad  # Direct assignment
 
         # Submit tasks to the thread pool and wait for completion
         futures = [
-            self.executor.submit(process_gradient, self.param_dict[name], data)
+            self.executor.submit(process_gradient, name, self.param_dict[name], data)
             for name, data in self.compression_data.items()
         ]
         concurrent.futures.wait(futures)
 
         # Clear stored data
         self.compression_data.clear()
-        
+
         # Send the compressed gradients to the save process
         if diff and dist.get_rank() == 0:
             self.queue.put((self.diff_ckpt,filename,i))
+
+    def get_error_norm(self):
+        """
+        Get the total norm of all error tensors (for monitoring).
+
+        Returns:
+            float: Total L2 norm of all error tensors.
+        """
+        if not self.use_error_feedback:
+            return 0.0
+
+        total_norm = 0.0
+        for error in self.error_feedback.values():
+            total_norm += error.norm().item() ** 2
+        return total_norm ** 0.5
+
+    def reset_error_feedback(self):
+        """
+        Reset all error buffers to zero (for debugging).
+        """
+        if not self.use_error_feedback:
+            return
+
+        for param_name in self.error_feedback:
+            self.error_feedback[param_name].zero_()
+
+        if dist.get_rank() == 0:
+            print("Error feedback buffers have been reset to zero.")
+
+    def get_error_stats(self):
+        """
+        Get detailed statistics of error tensors (for analysis).
+
+        Returns:
+            dict: Statistics including mean, std, max, min of errors.
+        """
+        if not self.use_error_feedback or len(self.error_feedback) == 0:
+            return {}
+
+        all_errors = torch.cat([e.flatten() for e in self.error_feedback.values()])
+
+        stats = {
+            'error_norm': self.get_error_norm(),
+            'error_mean': all_errors.mean().item(),
+            'error_std': all_errors.std().item(),
+            'error_max': all_errors.max().item(),
+            'error_min': all_errors.min().item(),
+            'num_params': len(self.error_feedback)
+        }
+
+        return stats
 
     def __del__(self):
         """

@@ -370,13 +370,8 @@ def run_parallel_workers(worker_func, gpu_assignments, num_gpus):
     """
     Run parallel decompression workers on multiple GPUs.
 
-    OPTIMIZATION S2: Uses torch.multiprocessing.Queue + CUDA IPC for zero-copy transfer
-    - Creates Event objects for process synchronization
-    - Workers send CUDA tensors via Queue (automatic IPC handling)
-    - Main process signals completion via Event to allow workers to exit safely
-
     Args:
-        worker_func: Worker function to execute (must support (checkpoint_list, gpu_id, result_queue, done_event))
+        worker_func: Worker function to execute (parallel_decompress_worker or parallel_decompress_worker_batch)
         gpu_assignments: List of checkpoint assignments for each GPU
         num_gpus: Number of GPUs to use
 
@@ -387,154 +382,71 @@ def run_parallel_workers(worker_func, gpu_assignments, num_gpus):
     """
     mp_ctx = mp.get_context('spawn')
     result_queue = mp_ctx.Queue()
-    done_events = [mp_ctx.Event() for _ in range(num_gpus)]  # S2: Per-worker synchronization
     processes = []
-
-    # ========== PERF LOG: Worker Launch Stage ==========
-    launch_start = time.time()
-    print(f"\n[PERF] ========== Worker Launch Stage (SHARED-MEM) ==========")
-    print(f"[PERF] OPTIMIZATION S2: Using CUDA IPC for zero-copy tensor transfer")
-    print(f"[PERF] Launch started at {launch_start:.3f}s")
-
-    worker_launch_times = []
+    start_time = time.time()
 
     # Start workers
-    worker_idx = 0
     for gpu_id in range(num_gpus):
         if len(gpu_assignments[gpu_id]) == 0:
             continue
 
-        worker_start = time.time()
-
-        # Calculate data size being passed to worker (metadata only)
-        metadata_size_kb = len(gpu_assignments[gpu_id]) * 0.1  # ~100 bytes per checkpoint mapping
-
-        # S2: Pass done_event to worker
         p = mp_ctx.Process(
             target=worker_func,
-            args=(gpu_assignments[gpu_id], gpu_id, result_queue, done_events[worker_idx])
+            args=(gpu_assignments[gpu_id], gpu_id, result_queue)
         )
         p.start()
         processes.append(p)
+        print(f"Worker GPU {gpu_id} started (PID: {p.pid})")
 
-        worker_end = time.time()
-        launch_delay = worker_end - worker_start
-        worker_launch_times.append((gpu_id, worker_start, worker_end, launch_delay))
+    print(f"\nWaiting for {len(processes)} workers to complete...")
 
-        print(f"[PERF] Worker GPU {gpu_id} launched at {worker_start:.3f}s (PID: {p.pid})")
-        print(f"       Launch delay: {launch_delay:.3f}s | Checkpoints: {len(gpu_assignments[gpu_id])} | Metadata: ~{metadata_size_kb:.1f} KB")
-
-        worker_idx += 1
-
-    launch_end = time.time()
-    total_launch_time = launch_end - launch_start
-
-    # Calculate launch intervals
-    print(f"\n[PERF] Worker launch intervals:")
-    for i in range(1, len(worker_launch_times)):
-        prev_gpu_id, prev_start, _, _ = worker_launch_times[i-1]
-        curr_gpu_id, curr_start, _, _ = worker_launch_times[i]
-        interval = curr_start - prev_start
-        print(f"[PERF]   GPU {prev_gpu_id} → GPU {curr_gpu_id}: {interval:.3f}s")
-
-    print(f"\n[PERF] Total launch time: {total_launch_time:.3f}s")
-    print(f"[PERF] Average per worker: {total_launch_time/len(processes):.3f}s")
-    print(f"[PERF] ============================================\n")
-
-    # ========== PERF LOG: Parallel Execution Stage (SHARED-MEM) ==========
-    exec_start = time.time()
-    print(f"[PERF] ========== Parallel Execution Stage (SHARED-MEM) ==========")
-    print(f"[PERF] Waiting for {len(processes)} workers to complete...")
-    print(f"[PERF] OPTIMIZATION S2: Receiving CUDA tensors via IPC (no file I/O)")
-    print(f"[PERF] Execution monitoring started at {exec_start:.3f}s\n")
-
-    # Collect results via CUDA IPC
+    # Collect results
     worker_results = {}
-    worker_completion_times = []
-    total_queue_transfer_time = 0
+    temp_files = []
 
-    for i in range(len(processes)):
+    for _ in range(len(processes)):
         try:
-            result_receive_start = time.time()
+            # Add timeout to prevent infinite blocking
+            gpu_id, result = result_queue.get(timeout=600)  # 10 minutes timeout
 
-            # S2: Receive CUDA tensors directly from Queue (uses CUDA IPC automatically)
-            gpu_id, decompressed_grads = result_queue.get(timeout=600)  # 10 minutes timeout
-
-            result_receive_end = time.time()
-            queue_transfer_time = result_receive_end - result_receive_start
-            total_queue_transfer_time += queue_transfer_time
-
-            if decompressed_grads is None:
-                print(f"[PERF] ERROR: GPU {gpu_id} worker failed at {result_receive_end:.3f}s")
+            if result is None:
+                print(f"ERROR: GPU {gpu_id} worker failed")
                 continue
 
-            # S2: Data already on GPU - no loading needed!
-            worker_results[gpu_id] = decompressed_grads
-
-            print(f"[PERF] GPU {gpu_id} completed at {result_receive_end:.3f}s")
-            print(f"       [SHARED-MEM] Queue transfer time: {queue_transfer_time:.6f}s ⚡")
-            print(f"       [SHARED-MEM] Received {len(decompressed_grads)} checkpoints via CUDA IPC (zero-copy)")
-
-            # Calculate approximate data size (for comparison with old method)
-            approx_size_mb = 0
-            for batch_grads in decompressed_grads.values():
-                for tensor in batch_grads.values():
-                    approx_size_mb += tensor.numel() * tensor.element_size() / (1024 * 1024)
-
-            print(f"       [SHARED-MEM] Approx. data size: {approx_size_mb:.2f} MB")
-            print(f"       [SHARED-MEM] Effective speed: {approx_size_mb / queue_transfer_time:.2f} MB/s (IPC handle transfer)")
-
-            worker_completion_times.append((gpu_id, result_receive_end, len(decompressed_grads)))
+            # Result is now a file path
+            if isinstance(result, str):
+                print(f"GPU {gpu_id} completed, loading results from {result}")
+                try:
+                    decompressed_grads = torch.load(result, map_location='cpu')
+                    worker_results[gpu_id] = decompressed_grads
+                    temp_files.append(result)
+                    print(f"GPU {gpu_id} loaded {len(decompressed_grads)} checkpoints from file")
+                except Exception as e:
+                    print(f"ERROR: GPU {gpu_id} failed to load results from {result}: {e}")
+            else:
+                # Fallback for old behavior (direct data transfer)
+                worker_results[gpu_id] = result
+                print(f"GPU {gpu_id} completed, received {len(result)} checkpoints directly")
 
         except Exception as e:
-            print(f"[PERF] ERROR: Failed to receive results from worker: {e}")
+            print(f"ERROR: Failed to receive results from worker: {e}")
             import traceback
             traceback.print_exc()
 
-    # ========== PERF LOG: Result Collection Summary (SHARED-MEM) ==========
-    exec_end = time.time()
-    total_exec_time = exec_end - exec_start
-
-    print(f"\n[PERF] ========== Parallel Execution Summary (SHARED-MEM) ==========")
-    print(f"[PERF] Total execution time: {total_exec_time:.3f}s")
-    print(f"[PERF] Total queue transfer time: {total_queue_transfer_time:.6f}s ⚡")
-    print(f"[PERF] Average queue transfer time: {total_queue_transfer_time/max(len(processes), 1):.6f}s")
-
-    if len(worker_completion_times) > 0:
-        # Sort by completion time
-        worker_completion_times.sort(key=lambda x: x[1])
-        first_gpu, first_time, _ = worker_completion_times[0]
-        last_gpu, last_time, _ = worker_completion_times[-1]
-
-        print(f"[PERF] First worker completed: GPU {first_gpu} at {first_time:.3f}s")
-        print(f"[PERF] Last worker completed: GPU {last_gpu} at {last_time:.3f}s")
-        print(f"[PERF] Worker completion span: {last_time - first_time:.3f}s")
-
-        print(f"\n[PERF] Worker completion order:")
-        for gpu_id, comp_time, ckpt_count in worker_completion_times:
-            relative_time = comp_time - exec_start
-            print(f"[PERF]   GPU {gpu_id}: {relative_time:.3f}s ({ckpt_count} checkpoints)")
-
-    print(f"[PERF] =================================================\n")
-
-    # S2: Signal workers that main process is done (allow them to exit safely)
-    # CRITICAL FIX: Must signal BEFORE join() to avoid deadlock!
-    print(f"[PERF] [SHARED-MEM] Signaling workers to exit...")
-    signal_start = time.time()
-    for event in done_events:
-        event.set()
-    signal_end = time.time()
-    print(f"[PERF] [SHARED-MEM] Signal time: {signal_end - signal_start:.6f}s\n")
-
-    # Wait for all processes to finish (workers can now exit safely)
-    join_start = time.time()
-    for i, p in enumerate(processes):
+    # Wait for all processes to finish
+    for p in processes:
         p.join()
-    join_end = time.time()
 
-    print(f"[PERF] Process join time: {join_end - join_start:.3f}s\n")
+    # Clean up temporary files
+    for temp_file in temp_files:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                print(f"Cleaned up temp file: {temp_file}")
+        except Exception as e:
+            print(f"WARNING: Failed to remove temp file {temp_file}: {e}")
 
-    elapsed_time = time.time() - launch_start
+    elapsed_time = time.time() - start_time
     return worker_results, elapsed_time
 
 
@@ -542,51 +454,33 @@ def apply_gradients_serially(model, optimizer, worker_results, num_gpus):
     """
     Apply decompressed gradients to model in serial order.
 
-    OPTIMIZATION S2: Accepts CUDA tensors directly (no CPU→GPU transfer needed)
-    - Gradients already on GPU from CUDA IPC
-    - Eliminates redundant CPU→GPU transfers during application
-
     This function merges gradients from all workers and applies them
     sequentially to ensure correct model state recovery.
 
     Args:
         model: Model object to apply gradients to
         optimizer: Optimizer object for gradient application
-        worker_results: Dictionary of decompressed gradients from workers (CUDA tensors)
+        worker_results: Dictionary of decompressed gradients from workers
         num_gpus: Number of GPUs used
 
     Returns:
         elapsed_time: Time taken for serial gradient application
     """
-    # ========== PERF LOG: Gradient Application Stage (SHARED-MEM) ==========
-    apply_start = time.time()
-    print(f"\n[PERF] ========== Gradient Application Stage (SHARED-MEM) ==========")
-    print(f"[PERF] OPTIMIZATION S2: Gradients already on GPU (no CPU→GPU transfer)")
-    print(f"[PERF] Application started at {apply_start:.3f}s")
+    start_time = time.time()
 
     # Merge all worker results
-    merge_start = time.time()
     all_grads = {}
     for gpu_id in range(num_gpus):
         if gpu_id in worker_results:
             all_grads.update(worker_results[gpu_id])
-    merge_end = time.time()
 
-    print(f"[PERF] Gradient merge time: {merge_end - merge_start:.3f}s")
-    print(f"[PERF] Total checkpoints to apply: {len(all_grads)}")
+    print(f"Total checkpoints to apply: {len(all_grads)}")
 
     # Build parameter name to parameter mapping
-    param_mapping_start = time.time()
     param_name_to_param = {name: param for name, param in model.named_parameters()}
-    param_mapping_end = time.time()
-    print(f"[PERF] Parameter mapping time: {param_mapping_end - param_mapping_start:.3f}s")
 
     # Sort checkpoint keys to ensure gradients are applied in correct order
     checkpoint_keys = sorted(all_grads.keys())
-
-    gradient_apply_times = []
-    device_transfer_times = []  # S2: Track device-to-device transfers (if needed)
-    optimizer_step_times = []
 
     for i, ckpt_idx in enumerate(checkpoint_keys):
         iter_start = time.time()
@@ -594,59 +488,22 @@ def apply_gradients_serially(model, optimizer, worker_results, num_gpus):
         # Clear gradients first to prevent gradient accumulation (P0 FIX)
         optimizer.zero_grad()
 
-        # S2: Set gradients from checkpoint (already on GPU!)
-        transfer_start = time.time()
-        for param_name, tensor_gpu in all_grads[ckpt_idx].items():
+        # Set gradients from checkpoint
+        for param_name, tensor_cpu in all_grads[ckpt_idx].items():
             param = param_name_to_param.get(param_name)
             if param is not None:
-                # S2: Tensor is already on GPU - just need to ensure it's on the correct device
-                if tensor_gpu.device != param.device:
-                    # Transfer between GPUs if needed (e.g., worker GPU ≠ training GPU)
-                    param.grad = tensor_gpu.to(param.device)
-                else:
-                    # Best case: same GPU, direct assignment
-                    param.grad = tensor_gpu
-        transfer_end = time.time()
-        device_transfer_times.append(transfer_end - transfer_start)
+                param.grad = tensor_cpu.cuda()
 
         # Apply gradients
-        step_start = time.time()
         optimizer.step()
-        step_end = time.time()
-        optimizer_step_times.append(step_end - step_start)
 
         iter_end = time.time()
-        iter_time = iter_end - iter_start
-        gradient_apply_times.append(iter_time)
 
         if (i + 1) % 5 == 0 or i == len(checkpoint_keys) - 1:
-            print(f"[PERF] Applied checkpoint {i+1}/{len(checkpoint_keys)} (batch {ckpt_idx})")
-            print(f"       Iter time: {iter_time:.3f}s | Device transfer: {transfer_end - transfer_start:.6f}s ⚡ | Optimizer step: {step_end - step_start:.3f}s")
+            print(f"Applied checkpoint {i+1}/{len(checkpoint_keys)} (batch {ckpt_idx}, {iter_end - iter_start:.3f}s)")
 
-    apply_end = time.time()
-    total_apply_time = apply_end - apply_start
-
-    # ========== PERF LOG: Gradient Application Summary (SHARED-MEM) ==========
-    print(f"\n[PERF] ========== Gradient Application Summary (SHARED-MEM) ==========")
-    print(f"[PERF] Total application time: {total_apply_time:.3f}s")
-    print(f"[PERF] Checkpoints applied: {len(checkpoint_keys)}")
-    print(f"[PERF] Average per checkpoint: {total_apply_time/len(checkpoint_keys):.3f}s")
-
-    if len(gradient_apply_times) > 0:
-        avg_device_transfer = sum(device_transfer_times) / len(device_transfer_times)
-        avg_optimizer_step = sum(optimizer_step_times) / len(optimizer_step_times)
-        total_device_transfer = sum(device_transfer_times)
-        total_optimizer_step = sum(optimizer_step_times)
-
-        print(f"\n[PERF] Time breakdown:")
-        print(f"[PERF]   Total device transfer: {total_device_transfer:.3f}s ({total_device_transfer/total_apply_time*100:.1f}%) ⚡")
-        print(f"[PERF]   Total optimizer step: {total_optimizer_step:.3f}s ({total_optimizer_step/total_apply_time*100:.1f}%)")
-        print(f"[PERF]   Average device transfer: {avg_device_transfer:.6f}s (vs ~0.1-0.5s for CPU→GPU)")
-        print(f"[PERF]   Average optimizer step: {avg_optimizer_step:.3f}s")
-
-    print(f"[PERF] ==================================================\n")
-
-    return total_apply_time
+    elapsed_time = time.time() - start_time
+    return elapsed_time
 
 
 def load_differential_checkpoint(model, optimizer, base_batch):
@@ -745,6 +602,7 @@ def load_batch_differential_checkpoint(model, optimizer, base_batch):
     print(f"Found checkpoints from batch {base_batch + 1} to {max_batch}")
 
     first_batch = ((base_batch // args.save_batch_freq) + 1) * args.save_batch_freq - 1
+    load_start = time.time()
 
     batch_files = []
     for i in range(first_batch, max_batch + 1, args.save_batch_freq):
@@ -760,58 +618,20 @@ def load_batch_differential_checkpoint(model, optimizer, base_batch):
 
     print(f"Found {len(batch_files)} batch files to load")
 
-    # ========== PERF LOG: Data Preparation Stage ==========
-    # OPTIMIZATION S1: Pass file paths instead of loading data into memory
-    # This eliminates ~1533 MB serialization overhead when spawning workers
-    data_prep_start = time.time()
-    print(f"\n[PERF] Data preparation started at {data_prep_start:.3f}s")
-    print(f"[PERF] OPTIMIZATION S1: Passing file paths to workers (no data loading)")
-
     checkpoint_list = []
     batch_files_loaded = 0
-    total_data_size = 0  # Track approximate data size (for logging only)
 
-    # Instead of loading checkpoint data, we only map batch indices to file paths
-    for idx, (file_batch_idx, filepath) in enumerate(batch_files):
-        file_scan_start = time.time()
-
-        # Get file size for logging (no actual loading)
-        file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
-        total_data_size += file_size_mb
+    for file_batch_idx, filepath in batch_files:
+        tensor_compressed = torch.load(filepath, map_location='cpu')
         batch_files_loaded += 1
 
-        # Quick scan to determine which checkpoints exist in this file
-        # We need to load the file once just to get the keys, but we don't keep the data
-        tensor_compressed = torch.load(filepath, map_location='cpu')
-        available_batches = list(tensor_compressed.keys())
-        del tensor_compressed  # Free memory immediately
-
-        file_scan_end = time.time()
-
-        print(f"[PERF] File {idx+1}/{len(batch_files)}: {os.path.basename(filepath)}")
-        print(f"       Size: {file_size_mb:.2f} MB | Scan time: {file_scan_end - file_scan_start:.3f}s")
-
-        ckpt_count_before = len(checkpoint_list)
         for j in range(file_batch_idx - args.save_batch_freq + 1, file_batch_idx + 1):
-            if j <= base_batch or j not in available_batches:
+            if j <= base_batch or j not in tensor_compressed:
                 continue
-            # OPTIMIZATION S1: Store (batch_idx, filepath, file_batch_idx) instead of (batch_idx, data)
-            checkpoint_list.append((j, filepath, file_batch_idx))
-
-        ckpt_count_added = len(checkpoint_list) - ckpt_count_before
-        print(f"       Mapped {ckpt_count_added} checkpoints to this file (batch {file_batch_idx - args.save_batch_freq + 1} to {file_batch_idx})")
+            checkpoint_list.append((j, tensor_compressed[j]))
 
     load_end = time.time()
-    data_prep_time = load_end - data_prep_start
-
-    print(f"\n[PERF] ========== Data Preparation Summary ==========")
-    print(f"[PERF] Total time: {data_prep_time:.3f}s")
-    print(f"[PERF] Files scanned: {batch_files_loaded}")
-    print(f"[PERF] Checkpoint mappings created: {len(checkpoint_list)}")
-    print(f"[PERF] Total data size (to be loaded by workers): ~{total_data_size:.2f} MB")
-    print(f"[PERF] Metadata size to transfer to workers: ~{len(checkpoint_list) * 0.0001:.3f} MB")
-    print(f"[PERF] Expected serialization reduction: {total_data_size / (len(checkpoint_list) * 0.0001):.0f}x")
-    print(f"[PERF] ==================================================\n")
+    print(f"Loaded {batch_files_loaded} batch files with {len(checkpoint_list)} checkpoints in {load_end - load_start:.3f}s")
 
     if len(checkpoint_list) == 0:
         print("ERROR: No valid checkpoints extracted from batch files")
@@ -833,38 +653,13 @@ def load_batch_differential_checkpoint(model, optimizer, base_batch):
 
     # Summary
     recovery_end = time.time()
-    total_recovery_time = recovery_end - recovery_start
-
     print(f"\n{'='*80}")
     print(f"Batch parallel recovery completed")
     print(f"{'='*80}")
-
-    # ========== PERF LOG: Final Performance Summary ==========
-    print(f"\n[PERF] ========== FINAL PERFORMANCE SUMMARY ==========")
-    print(f"[PERF] Total recovery time: {total_recovery_time:.3f}s")
-    print(f"[PERF] ")
-    print(f"[PERF] Time breakdown:")
-    print(f"[PERF]   1. Data preparation:     {data_prep_time:.3f}s ({data_prep_time/total_recovery_time*100:.1f}%)")
-    print(f"[PERF]   2. Parallel decompression: {parallel_time:.3f}s ({parallel_time/total_recovery_time*100:.1f}%)")
-    print(f"[PERF]   3. Gradient application:  {apply_time:.3f}s ({apply_time/total_recovery_time*100:.1f}%)")
-    print(f"[PERF] ")
-    print(f"[PERF] Data statistics:")
-    print(f"[PERF]   - Batch files loaded: {batch_files_loaded}")
-    print(f"[PERF]   - Checkpoints processed: {len(checkpoint_list)}")
-    print(f"[PERF]   - Total data size: ~{total_data_size:.2f} MB")
-    print(f"[PERF]   - Effective throughput: {total_data_size/total_recovery_time:.2f} MB/s")
-    print(f"[PERF] ")
-    print(f"[PERF] Parallel efficiency:")
-    if parallel_time > 0:
-        # Estimate sequential time (if all workers ran on one GPU)
-        # This is approximate, assuming linear scaling
-        estimated_sequential_time = parallel_time * num_gpus * 0.8  # 0.8 factor for overhead
-        parallel_speedup = estimated_sequential_time / parallel_time
-        parallel_efficiency = (parallel_speedup / num_gpus) * 100
-        print(f"[PERF]   - GPUs used: {num_gpus}")
-        print(f"[PERF]   - Estimated speedup: {parallel_speedup:.2f}x")
-        print(f"[PERF]   - Parallel efficiency: {parallel_efficiency:.1f}%")
-    print(f"[PERF] ==================================================")
+    print(f"Total time: {recovery_end - recovery_start:.3f}s")
+    print(f"  - Batch file loading: {load_end - load_start:.3f}s")
+    print(f"  - Parallel decompression: {parallel_time:.3f}s")
+    print(f"  - Serial application: {apply_time:.3f}s")
     print(f"{'='*80}\n")
 
     return model, optimizer, max_batch
