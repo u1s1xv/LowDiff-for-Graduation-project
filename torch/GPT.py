@@ -44,8 +44,13 @@ parser.add_argument("--resume", type=int, default=0, help='resume from checkpoin
 parser.add_argument("--diff", action="store_true", help='whether to use differential checkpoint')
 parser.add_argument("--freq", default=0, type=int, help='how many iteration to save a full checkpoint')
 parser.add_argument("--save-batch-freq", default='1', type=int, help='in-memory batching frequency')
-parser.add_argument("--seq_length", type=int, default=512)  
+parser.add_argument("--seq_length", type=int, default=512)
 parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
+parser.add_argument("--enable-smart-checkpoint", action="store_true", help='enable smart checkpoint management')
+parser.add_argument("--enable-optimizer-monitoring", action="store_true", help='enable hardware fault detection via optimizer state monitoring')
+parser.add_argument("--monitoring-safety-factor", type=float, default=1.0, help='safety factor for detection thresholds (>1.0 = more conservative)')
+parser.add_argument("--inject-fault", action="store_true", help='inject hardware fault for testing (development only)')
+parser.add_argument("--inject-fault-at-batch", type=int, default=50, help='batch index to inject fault')
 args = parser.parse_args()
 
 
@@ -192,13 +197,41 @@ def main():
         print(f"Training will resume from epoch {resume_epoch}, batch {last_trained_batch + 1}")
 
     model.cuda()
-    
+
     # Initialize DeepSpeed
     deepspeed.enable_backward_allreduce = False
-    
-    # Use the Communicator class
-    communicator = Communicator(model, k=args.compress_ratio, save_batch_freq=args.save_batch_freq)
+
+    # 确定max_full_interval：如果--freq=0，使用默认值30
+    max_full_interval = args.freq if args.freq > 0 else 30
+
+    # Use the Communicator class with smart checkpoint support
+    communicator = Communicator(
+        model,
+        k=args.compress_ratio,
+        save_batch_freq=args.save_batch_freq,
+        enable_smart_checkpoint=args.enable_smart_checkpoint,
+        save_dir=args.save_dir,
+        model_name=args.model,
+        dataset_name=args.dataset,
+        compressor_name=args.compressor,
+        compressor_ratio=args.compressor_ratio,
+        max_full_interval=max_full_interval
+    )
     communicator.register_hooks()
+
+    # Initialize optimizer anomaly detector (if enabled)
+    anomaly_detector = None
+    if args.enable_optimizer_monitoring:
+        from communicator.optimizer_anomaly_detector import OptimizerAnomalyDetector
+        global_batch_size = args.batch_size * dist.get_world_size()
+        anomaly_detector = OptimizerAnomalyDetector(
+            batch_size=global_batch_size,
+            seq_length=args.seq_length,
+            num_layers=12,  # GPT-2 has 12 layers
+            learning_rate=args.lr,
+            buffer_size=2,
+            safety_factor=args.monitoring_safety_factor
+        )
 
     # Training loop
     # 如果是恢复训练，从恢复的 epoch 开始；否则从 0 开始
@@ -242,10 +275,33 @@ def main():
                 loss = outputs.loss
 
                 model.backward(loss)
+
+                # 差分检查点：始终保存（不能跳过）
                 communicator.decompress_save(args.diff, '{}/{}_{}_{}_{}_{}-{}_batch{}.pth.tar'.format(args.save_dir,args.model,args.dataset,args.compressor,args.compressor_ratio,epoch,batch_idx,args.save_batch_freq), batch_idx)
 
                 # 梯度裁剪：防止梯度爆炸
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+                # 故障注入（仅用于测试）
+                if args.inject_fault and batch_idx == args.inject_fault_at_batch:
+                    if dist.get_rank() == 0:
+                        print(f"\n[FaultInjection] Injecting hardware fault at batch {batch_idx}")
+                    # 模拟硬件位翻转：向梯度注入大扰动
+                    for p in model.parameters():
+                        if p.grad is not None:
+                            p.grad += torch.randn_like(p.grad) * 10.0
+
+                # 检查优化器状态（在step()之前）
+                if anomaly_detector is not None:
+                    rolled_back, reason = anomaly_detector.check_and_rollback(
+                        model.module if hasattr(model, 'module') else model,
+                        model.optimizer,
+                        batch_idx
+                    )
+
+                    if rolled_back:
+                        # 回滚成功，跳过本次更新，重新执行该batch
+                        continue
 
                 model.step()
 
@@ -253,19 +309,55 @@ def main():
                     print("[Epoch {}/{}] Batch {}, Loss: {:.3f}, Time: {:.3f}"
                         .format(epoch, args.epochs, batch_idx, loss.item(), time.time() - end))
 
-                if dist.get_rank() == 0 and args.freq > 0 and batch_idx % args.freq == 0:
-                            begin_full = time.time()
-                            torch.save({
-                                'epoch': epoch + 1,
-                                'model': model.module.state_dict(),
-                                'optimizer' : optimizer.state_dict(),
-                            }, '{}/{}_{}_{}_{}_{}_{}_full.pth.tar'.format(args.save_dir,args.model,args.dataset,args.compressor,args.compressor_ratio,epoch,batch_idx))
-                            end_full = time.time()
-                            print("base checkpoint takes {:.3f}s".format(end_full - begin_full))
+                # 全量检查点保存逻辑
+                if dist.get_rank() == 0:
+                    should_save_full = False
+                    save_reason = ''
+
+                    if args.enable_smart_checkpoint:
+                        # 智能检查点决策
+                        should_save_full, save_reason = communicator.should_save_full_checkpoint(
+                            batch_idx, epoch, loss.item()
+                        )
+                    elif args.freq > 0 and batch_idx % args.freq == 0:
+                        # 传统定期保存
+                        should_save_full = True
+                        save_reason = 'periodic'
+
+                    if should_save_full:
+                        begin_full = time.time()
+                        torch.save({
+                            'epoch': epoch + 1,
+                            'model': model.module.state_dict(),
+                            'optimizer': optimizer.state_dict(),
+                        }, '{}/{}_{}_{}_{}_{}_{}_full.pth.tar'.format(
+                            args.save_dir, args.model, args.dataset, args.compressor,
+                            args.compressor_ratio, epoch, batch_idx
+                        ))
+                        end_full = time.time()
+                        print("[SmartCkpt] Saved full checkpoint at batch {} (reason: {}, time: {:.3f}s)".format(
+                            batch_idx, save_reason, end_full - begin_full
+                        ))
+
+                        # 清理旧的检查点
+                        if args.enable_smart_checkpoint:
+                            communicator.cleanup_old_checkpoints(batch_idx, epoch)
+                            communicator.cleanup_old_full_checkpoints()
 
                 end = time.time()
 
             print(f"Epoch {epoch} completed.")
+
+        # 训练结束后输出统计信息
+        if anomaly_detector is not None and dist.get_rank() == 0:
+            stats = anomaly_detector.get_statistics()
+            print(f"\n{'='*60}")
+            print(f"[OptimizerMonitor] Training completed - Final statistics")
+            print(f"{'='*60}")
+            print(f"  Anomalies detected: {stats['anomaly_count']}")
+            print(f"  Rollbacks performed: {stats['rollback_count']}")
+            print(f"  Buffer size: {stats['buffer_size']}")
+            print(f"{'='*60}\n")
 
 def load_base_checkpoint(model, optimizer):
     """

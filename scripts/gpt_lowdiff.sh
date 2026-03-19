@@ -8,7 +8,7 @@
 
 # Set environment variables
 export MASTER_ADDR=localhost
-export MASTER_PORT=29500
+export MASTER_PORT=$((29500 + RANDOM % 1000)) 
 export NCCL_IB_DISABLE=1
 
 # Redirect all caches to /mnt/newdisk (avoid root partition full)
@@ -21,15 +21,22 @@ export TRANSFORMERS_CACHE=/mnt/newdisk/xiekunpeng/.cache/huggingface/transformer
 # Training parameters
 DATASET=wikitext-2
 MODEL=gpt2
-EPOCHS=10
+EPOCHS=5
 BATCH_SIZE=4
 COMPRESSOR=topk
-COMPRESSOR_RATIO=0.05  
-FREQ=0
+COMPRESSOR_RATIO=0.01
+FREQ=100                    # 最大间隔保护（智能检查点会复用此参数）
 SAVE_BATCH_FREQ=20
 SAVE_DIR=/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff
 RESUME=0
 NUM_GPUS=4
+ENABLE_SMART_CHECKPOINT=1  # 启用智能检查点（1=启用，0=禁用）
+
+# Optimizer Monitoring (Hardware Fault Detection)
+ENABLE_OPTIMIZER_MONITORING=0  # 启用优化器监控（1=启用，0=禁用）
+MONITORING_SAFETY_FACTOR=1.0   # 安全系数（>1.0更保守，默认1.0）
+INJECT_FAULT=0                 # 注入故障测试（1=启用，0=禁用，仅用于测试）
+INJECT_FAULT_AT_BATCH=50       # 在第N个batch注入故障
 
 # Create save directory if it doesn't exist
 mkdir -p $SAVE_DIR
@@ -73,8 +80,16 @@ log ""
 log "LowDiff Configuration:"
 log "  - Compressor: $COMPRESSOR"
 log "  - Compression Ratio: $COMPRESSOR_RATIO"
-log "  - Full Checkpoint Frequency: every $FREQ iterations"
+log "  - Full Checkpoint Frequency: every $FREQ iterations (max interval)"
 log "  - Differential Checkpoint Frequency: every $SAVE_BATCH_FREQ iterations"
+log "  - Smart Checkpoint: $([ $ENABLE_SMART_CHECKPOINT -eq 1 ] && echo 'ENABLED' || echo 'DISABLED')"
+log ""
+log "Fault Tolerance Configuration:"
+log "  - Optimizer Monitoring: $([ $ENABLE_OPTIMIZER_MONITORING -eq 1 ] && echo 'ENABLED' || echo 'DISABLED')"
+if [ $ENABLE_OPTIMIZER_MONITORING -eq 1 ]; then
+    log "  - Safety Factor: $MONITORING_SAFETY_FACTOR"
+    log "  - Fault Injection: $([ $INJECT_FAULT -eq 1 ] && echo 'ENABLED (batch '$INJECT_FAULT_AT_BATCH')' || echo 'DISABLED')"
+fi
 log ""
 log "Starting training at $(date)..."
 log "======================================================================"
@@ -100,9 +115,8 @@ log ""
     echo ""
 } >> $LOG_FILE
 
-# Distributed training with DeepSpeed
-deepspeed --num_gpus=$NUM_GPUS ./torch/GPT.py\
-  --dataset $DATASET \
+# Build command line arguments
+CMD_ARGS="--dataset $DATASET \
   --model $MODEL \
   --epochs $EPOCHS \
   --batch-size $BATCH_SIZE \
@@ -112,7 +126,26 @@ deepspeed --num_gpus=$NUM_GPUS ./torch/GPT.py\
   --save-batch-freq $SAVE_BATCH_FREQ \
   --save-dir $SAVE_DIR \
   --resume $RESUME \
-  2>&1 | tee -a $LOG_FILE
+  --diff"
+
+# Add smart checkpoint if enabled
+if [ $ENABLE_SMART_CHECKPOINT -eq 1 ]; then
+    CMD_ARGS="$CMD_ARGS --enable-smart-checkpoint"
+fi
+
+# Add optimizer monitoring if enabled
+if [ $ENABLE_OPTIMIZER_MONITORING -eq 1 ]; then
+    CMD_ARGS="$CMD_ARGS --enable-optimizer-monitoring --monitoring-safety-factor $MONITORING_SAFETY_FACTOR"
+fi
+
+# Add fault injection if enabled (for testing only)
+if [ $INJECT_FAULT -eq 1 ]; then
+    CMD_ARGS="$CMD_ARGS --inject-fault --inject-fault-at-batch $INJECT_FAULT_AT_BATCH"
+fi
+
+# Distributed training with DeepSpeed
+log "Starting DeepSpeed training with $NUM_GPUS GPUs..."
+deepspeed --num_gpus=$NUM_GPUS ./torch/GPT.py $CMD_ARGS 2>&1 | tee -a $LOG_FILE
 
 # Check exit status
 EXIT_CODE=$?

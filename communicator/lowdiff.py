@@ -9,7 +9,9 @@ import datetime
 import time
 
 class Communicator:
-    def __init__(self, model, k=0.01, num_threads=None, save_batch_freq=1, use_error_feedback=True):
+    def __init__(self, model, k=0.01, num_threads=None, save_batch_freq=1, use_error_feedback=True,
+                 enable_smart_checkpoint=False, save_dir=None, model_name=None, dataset_name=None,
+                 compressor_name=None, compressor_ratio=None, max_full_interval=30, keep_full_checkpoints=3):
         """
         Initialize the Communicator for Top-K gradient compression with async all_gather.
 
@@ -20,6 +22,14 @@ class Communicator:
                                           Defaults to half of CPU cores.
             save_batch_freq (int): In-memory batching frequency for saving compressed gradients.
             use_error_feedback (bool): Whether to use error feedback mechanism for gradient compensation.
+            enable_smart_checkpoint (bool): Whether to enable smart checkpoint management.
+            save_dir (str): Directory to save checkpoints (required if enable_smart_checkpoint=True).
+            model_name (str): Model name for checkpoint naming.
+            dataset_name (str): Dataset name for checkpoint naming.
+            compressor_name (str): Compressor name for checkpoint naming.
+            compressor_ratio (float): Compressor ratio for checkpoint naming.
+            max_full_interval (int): Maximum interval between full checkpoints (from --freq parameter).
+            keep_full_checkpoints (int): Number of recent full checkpoints to keep.
         """
         self.k = k
         self.model = model
@@ -30,6 +40,24 @@ class Communicator:
         self.error_feedback = {}  # Store error tensors for each parameter
         self.error_clipped_count = 0  # Track how many times error was clipped
         self.error_reset_count = 0  # Track how many times error was reset due to NaN/Inf
+
+        # Smart Checkpoint Management
+        self.enable_smart_checkpoint = enable_smart_checkpoint
+        self.smart_ckpt_manager = None
+        if enable_smart_checkpoint and dist.get_rank() == 0:
+            from communicator.smart_checkpoint import SmartCheckpointManager
+            if not all([save_dir, model_name, dataset_name, compressor_name, compressor_ratio]):
+                raise ValueError("Smart checkpoint requires save_dir, model_name, dataset_name, compressor_name, and compressor_ratio")
+            self.smart_ckpt_manager = SmartCheckpointManager(
+                save_dir=save_dir,
+                model_name=model_name,
+                dataset_name=dataset_name,
+                compressor=compressor_name,
+                ratio=compressor_ratio,
+                max_full_interval=max_full_interval,
+                keep_full_checkpoints=keep_full_checkpoints
+            )
+            print(f"[SmartCkpt] Smart checkpoint management ENABLED (max_interval={max_full_interval}, keep={keep_full_checkpoints})")
 
         # Get the number of available CPU threads (default to half of total cores, max 32)
         if num_threads is None:
@@ -119,6 +147,44 @@ class Communicator:
             if param.requires_grad:
                 param.register_hook(lambda grad, name=name: self.async_send(grad, name))
     
+    def get_gradient_norm(self):
+        """计算当前所有参数的梯度范数（用于智能检查点决策）"""
+        total_norm = 0.0
+        for param in self.model.parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** 0.5
+        return total_norm
+
+    def should_save_full_checkpoint(self, iteration, epoch, loss):
+        """
+        决策是否保存全量检查点（智能检查点管理）
+
+        Args:
+            iteration: 当前batch索引
+            epoch: 当前epoch
+            loss: 当前loss值
+
+        Returns:
+            (should_save, reason): 是否保存及原因
+        """
+        if not self.enable_smart_checkpoint or self.smart_ckpt_manager is None:
+            return False, 'smart_checkpoint_disabled'
+
+        # 注意：grad_norm参数已被移除，不再基于梯度范数做决策
+        return self.smart_ckpt_manager.should_save_full_checkpoint(iteration, epoch, loss)
+
+    def cleanup_old_full_checkpoints(self):
+        """清理旧的全量检查点"""
+        if self.enable_smart_checkpoint and self.smart_ckpt_manager is not None:
+            self.smart_ckpt_manager.cleanup_old_full_checkpoints()
+
+    def cleanup_old_checkpoints(self, current_iteration, epoch):
+        """清理旧的差分检查点"""
+        if self.enable_smart_checkpoint and self.smart_ckpt_manager is not None:
+            self.smart_ckpt_manager.cleanup_old_diff_checkpoints(current_iteration, epoch)
+
     def decompress_save(self, diff, filename, i):
         """
         Parallel gradient restoration with error feedback update.
