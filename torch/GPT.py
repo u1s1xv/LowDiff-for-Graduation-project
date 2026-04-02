@@ -309,6 +309,7 @@ def main():
                     print("[Epoch {}/{}] Batch {}, Loss: {:.3f}, Time: {:.3f}"
                         .format(epoch, args.epochs, batch_idx, loss.item(), time.time() - end))
 
+                # 测试：查询buffer状态（每10个batch）
                 # 全量检查点保存逻辑
                 if dist.get_rank() == 0:
                     should_save_full = False
@@ -325,6 +326,9 @@ def main():
                         save_reason = 'periodic'
 
                     if should_save_full:
+                        # 先清理过期差分检查点，再保存全量检查点，尽早释放内存
+                        communicator.clear_buffer_before(batch_idx)
+
                         begin_full = time.time()
                         torch.save({
                             'epoch': epoch + 1,

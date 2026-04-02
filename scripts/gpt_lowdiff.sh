@@ -21,16 +21,16 @@ export TRANSFORMERS_CACHE=/mnt/newdisk/xiekunpeng/.cache/huggingface/transformer
 # Training parameters
 DATASET=wikitext-2
 MODEL=gpt2
-EPOCHS=5
+EPOCHS=1                    # 测试：只训练1个epoch
 BATCH_SIZE=4
 COMPRESSOR=topk
 COMPRESSOR_RATIO=0.01
 FREQ=100                    # 最大间隔保护（智能检查点会复用此参数）
-SAVE_BATCH_FREQ=20
+SAVE_BATCH_FREQ=20          # 保留参数（兼容性）
 SAVE_DIR=/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff
 RESUME=0
 NUM_GPUS=4
-ENABLE_SMART_CHECKPOINT=1  # 启用智能检查点（1=启用，0=禁用）
+ENABLE_SMART_CHECKPOINT=0  # 测试：禁用智能检查点，专注测试延迟写入
 
 # Optimizer Monitoring (Hardware Fault Detection)
 ENABLE_OPTIMIZER_MONITORING=0  # 启用优化器监控（1=启用，0=禁用）
