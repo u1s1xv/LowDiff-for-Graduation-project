@@ -3,13 +3,14 @@
 实现检查点清理功能
 """
 import os
+import re
 
 
 class SmartCheckpointManager:
     """智能检查点管理器：负责清理过期的全量检查点和差分检查点"""
 
     def __init__(self, save_dir, model_name, dataset_name, compressor, ratio,
-                 max_full_interval=100, keep_full_checkpoints=3):
+                 max_full_interval=100, keep_full_checkpoints=3, save_batch_freq=1):
         """
         Args:
             save_dir: 检查点保存目录
@@ -19,18 +20,43 @@ class SmartCheckpointManager:
             ratio: 压缩比例
             max_full_interval: 全量检查点最大间隔（保底策略）
             keep_full_checkpoints: 保留最近N个全量检查点
+            save_batch_freq: 差分检查点批量频率（用于清理文件匹配）
         """
         self.save_dir = save_dir
         self.model_name = model_name
         self.dataset_name = dataset_name
         self.compressor = compressor
         self.ratio = ratio
+        self.save_batch_freq = int(save_batch_freq)
 
         self.max_full_interval = max_full_interval
         self.last_full_checkpoint = 0
         self.keep_full_checkpoints = keep_full_checkpoints
 
         self.full_checkpoint_history = []  # 记录全量检查点的(epoch, iteration)
+
+        # 启动时重建全量检查点历史，确保恢复场景下间隔判断正确
+        self._rebuild_full_checkpoint_history()
+
+    def _rebuild_full_checkpoint_history(self):
+        pattern = r"^{}_{}_{}_{}_([0-9]+)_([0-9]+)_full\.pth\.tar$".format(
+            self.model_name, self.dataset_name, self.compressor, self.ratio
+        )
+        candidates = []
+        try:
+            for filename in os.listdir(self.save_dir):
+                match = re.match(pattern, filename)
+                if match:
+                    epoch = int(match.group(1))
+                    batch = int(match.group(2))
+                    candidates.append((epoch, batch))
+        except Exception:
+            candidates = []
+
+        candidates.sort(key=lambda x: (x[0], x[1]))
+        self.full_checkpoint_history = candidates
+        if candidates:
+            self.last_full_checkpoint = candidates[-1][1]
 
     def should_save_full_checkpoint(self, iteration, epoch, loss=None):
         """
@@ -98,26 +124,25 @@ class SmartCheckpointManager:
 
         # 扫描保存目录中的所有差分检查点文件
         try:
+            pattern = r"^{}_{}_{}_{}_([0-9]+)-([0-9]+)_batch(\d+)\.pth\.tar$".format(
+                self.model_name, self.dataset_name, self.compressor, self.ratio
+            )
             for filename in os.listdir(self.save_dir):
-                # 匹配差分检查点文件名格式：model_dataset_compressor_ratio_epoch-batch_batchN.pth.tar
-                if filename.endswith('_batch1.pth.tar') or filename.endswith(f'_batch{20}.pth.tar'):
-                    # 解析文件名获取epoch和batch信息
-                    parts = filename.replace('.pth.tar', '').split('_')
-                    if len(parts) >= 5:
-                        try:
-                            # 提取epoch-batch部分
-                            epoch_batch_str = parts[-2]  # 例如 "0-100"
-                            if '-' in epoch_batch_str:
-                                file_epoch, file_batch = map(int, epoch_batch_str.split('-'))
+                match = re.match(pattern, filename)
+                if not match:
+                    continue
 
-                                # 删除倒数第二个全量检查点之前的差分检查点
-                                if (file_epoch < second_last_epoch) or \
-                                   (file_epoch == second_last_epoch and file_batch < second_last_batch):
-                                    filepath = os.path.join(self.save_dir, filename)
-                                    os.remove(filepath)
-                                    cleanup_count += 1
-                        except (ValueError, IndexError):
-                            continue
+                try:
+                    file_epoch = int(match.group(1))
+                    file_batch = int(match.group(2))
+                except (ValueError, IndexError):
+                    continue
+
+                if (file_epoch < second_last_epoch) or \
+                   (file_epoch == second_last_epoch and file_batch < second_last_batch):
+                    filepath = os.path.join(self.save_dir, filename)
+                    os.remove(filepath)
+                    cleanup_count += 1
         except Exception as e:
             print(f"[SmartCkpt] Warning: Failed to scan directory {self.save_dir}: {e}")
 
@@ -126,7 +151,7 @@ class SmartCheckpointManager:
 
     def _get_diff_checkpoint_path(self, epoch, batch):
         """构造差分检查点文件路径"""
-        filename = f"{self.model_name}_{self.dataset_name}_{self.compressor}_{self.ratio}_{epoch}-{batch}_batch1.pth.tar"
+        filename = f"{self.model_name}_{self.dataset_name}_{self.compressor}_{self.ratio}_{epoch}-{batch}_batch{self.save_batch_freq}.pth.tar"
         return os.path.join(self.save_dir, filename)
 
     def _get_full_checkpoint_path(self, epoch, batch):

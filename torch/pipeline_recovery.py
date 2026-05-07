@@ -65,6 +65,8 @@ parser.add_argument("--sdc-min-batch", type=int, default=20,
                     help='minimum batch index before SDC injection is allowed')
 parser.add_argument("--sdc-target-param", type=str, default=None,
                     help='only inject parameters whose name contains this substring')
+parser.add_argument("--pipeline-buffer-size", type=int, default=2,
+                    help='pipeline buffer size (number of checkpoints to prefetch)')
 args = parser.parse_args()
 
 
@@ -200,11 +202,13 @@ def main():
         print(f"Base checkpoint loaded: epoch {resume_epoch}, batch {resume_batch}")
         print(f"Will replay differential checkpoints from batch {resume_batch + 1} onwards")
 
-        # 根据批处理频率选择恢复方法，并传递 base_batch 参数
+        # 使用流水线恢复
         if args.save_batch_freq > 1:
-            model, optimizer, last_trained_batch = load_batch_differential_checkpoint(model, optimizer, resume_batch)
+            model, optimizer, last_trained_batch = load_batch_differential_checkpoint_pipeline(
+                model, optimizer, resume_batch, buffer_size=args.pipeline_buffer_size)
         else:
-            model, optimizer, last_trained_batch = load_differential_checkpoint(model, optimizer, resume_batch)
+            model, optimizer, last_trained_batch = load_differential_checkpoint_pipeline(
+                model, optimizer, resume_batch, buffer_size=args.pipeline_buffer_size)
 
         print(f"Differential checkpoint replay completed")
         print(f"Last trained batch: {last_trained_batch}")
@@ -308,10 +312,6 @@ def main():
                     if dist.get_rank() == 0 and batch_idx % 10 == 0:
                         print(f"[Epoch {epoch}] Skipping batch {batch_idx} (already trained)")
                     continue
-
-                # 调试：每10个batch输出一次实际处理的batch数量
-                if dist.get_rank() == 0 and batch_idx % 10 == 0:
-                    print(f"[DEBUG] Rank 0: batch_idx={batch_idx}, total_processed={batch_idx+1}")
 
                 end = time.time()
                 inputs = batch["input_ids"].cuda()
@@ -597,23 +597,28 @@ def find_max(base_batch):  # 新增参数：base_batch（基准检查点的 batc
 
     return max_x
 
-def load_differential_checkpoint(model, optimizer, base_batch):  # 新增参数
+
+def load_differential_checkpoint_pipeline(model, optimizer, base_batch, buffer_size=2):
     """
-    Load differential checkpoints iteratively and apply them to the model (SERIAL version).
+    流水线版本：Load differential checkpoints with I/O and compute overlap.
 
     Args:
         base_batch (int): The batch number of the base checkpoint.
-                         Start replaying from base_batch + 1.
+        buffer_size (int): Pipeline buffer size (default 2 to prevent OOM).
     """
     print(f"\n{'='*80}")
-    print(f"[PERF] ========== Serial Differential Checkpoint Recovery ==========")
+    print(f"[PERF] ========== Pipeline Differential Checkpoint Recovery ==========")
+    print(f"[PERF] Buffer size: {buffer_size}")
     print(f"{'='*80}\n")
+
+    import queue
+    import threading
 
     recovery_start = time.time()
     filedir = args.save_dir
     _parameter_names = {name: param for name, param in model.named_parameters()}
 
-    # ========== PERF: Find Checkpoints ==========
+    # Find checkpoints
     find_start = time.time()
     iterations = find_max(base_batch)
     find_end = time.time()
@@ -623,218 +628,214 @@ def load_differential_checkpoint(model, optimizer, base_batch):  # 新增参数
         return model, optimizer, base_batch
 
     num_checkpoints = iterations - base_batch
-    print(f"[PERF] Found {num_checkpoints} differential checkpoints (batch {base_batch + 1} to {iterations})")
+    print(f"[PERF] Found {num_checkpoints} differential checkpoints")
     print(f"[PERF] Checkpoint discovery time: {find_end - find_start:.3f}s\n")
 
-    # ========== PERF: Serial Recovery Loop ==========
-    recovery_times = []
-    load_times = []
-    decompress_times = []
-    apply_times = []
-
-    print(f"[PERF] ========== Starting Serial Recovery Loop ==========\n")
-
-    # 从 base_batch + 1 开始回放
-    for i in range(base_batch + 1, iterations + 1):  # iterations + 1 确保包含最后一个
-        iter_start = time.time()
-        # 修复：使用正确的 batch 后缀匹配保存时的命名
-        filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch{}.pth.tar'.format(
+    # 创建文件列表
+    file_list = []
+    for i in range(base_batch + 1, iterations + 1):
+        filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch1.pth.tar'.format(
             args.model, args.dataset, args.compressor, args.compressor_ratio,
-            args.resume-1, i, args.save_batch_freq
+            args.resume-1, i
         )
+        if os.path.exists(filepath):
+            file_list.append((i, filepath))
 
-        # 检查文件是否存在
-        if not os.path.exists(filepath):
-            print(f"[PERF] WARNING: Diff checkpoint {filepath} not found, skipping...")
-            continue
+    if not file_list:
+        print("[PERF] ERROR: No checkpoint files found")
+        return model, optimizer, base_batch
 
-        # Load checkpoint
-        load_start = time.time()
-        tensor_compressed = torch.load(filepath, map_location='cpu')
-        load_end = time.time()
-        load_time = load_end - load_start
-        load_times.append(load_time)
+    # 队列：加载→解压→应用
+    load_queue = queue.Queue(maxsize=buffer_size)
+    decompress_queue = queue.Queue(maxsize=buffer_size)
+    exception_holder = [None]
 
-        # Decompress gradients
-        decompress_start = time.time()
-        for key in tensor_compressed.keys():
-            tensor = topk_decompress(
-                tensor_compressed[key]['values'],
-                tensor_compressed[key]['indices'],
-                tensor_compressed[key]['shape']
-            )
+    # Stage 1: 加载线程
+    def loader_thread():
+        try:
+            for batch_idx, filepath in file_list:
+                checkpoint = torch.load(filepath, map_location='cpu')
+                load_queue.put((batch_idx, checkpoint))
+            load_queue.put(None)  # 结束信号
+        except Exception as e:
+            exception_holder[0] = e
+            load_queue.put(None)
+
+    # Stage 2: 解压线程
+    def decompress_thread():
+        try:
+            while True:
+                item = load_queue.get()
+                if item is None:
+                    decompress_queue.put(None)
+                    break
+
+                batch_idx, checkpoint = item
+                decompressed = {}
+                for key in checkpoint.keys():
+                    tensor = topk_decompress(
+                        checkpoint[key]['values'],
+                        checkpoint[key]['indices'],
+                        checkpoint[key]['shape']
+                    )
+                    decompressed[key] = tensor
+
+                decompress_queue.put((batch_idx, decompressed))
+        except Exception as e:
+            exception_holder[0] = e
+            decompress_queue.put(None)
+
+    # 启动线程
+    loader = threading.Thread(target=loader_thread, daemon=True)
+    decompressor = threading.Thread(target=decompress_thread, daemon=True)
+
+    loader.start()
+    decompressor.start()
+
+    # Stage 3: 主线程应用梯度（保证顺序）
+    print(f"[PERF] ========== Starting Pipeline Recovery ==========\n")
+
+    apply_times = []
+    last_batch = base_batch
+    processed = 0
+
+    while True:
+        if exception_holder[0]:
+            raise exception_holder[0]
+
+        item = decompress_queue.get()
+        if item is None:
+            break
+
+        batch_idx, decompressed = item
+
+        # 应用梯度
+        apply_start = time.time()
+        for key, tensor in decompressed.items():
             param = _parameter_names.get(key)
             if param is not None:
                 if tensor.dtype != param.dtype:
                     tensor = tensor.to(param.dtype)
                 param.grad = tensor
-        decompress_end = time.time()
-        decompress_time = decompress_end - decompress_start
-        decompress_times.append(decompress_time)
-
-        # Apply gradients
-        apply_start = time.time()
         optimizer.step()
         apply_end = time.time()
-        apply_time = apply_end - apply_start
-        apply_times.append(apply_time)
 
-        iter_end = time.time()
-        iter_time = iter_end - iter_start
-        recovery_times.append(iter_time)
+        apply_times.append(apply_end - apply_start)
+        last_batch = batch_idx
+        processed += 1
 
-        # Log every 5 checkpoints
-        if (i - base_batch) % 5 == 0 or i == iterations:
-            print(f"[PERF] Checkpoint {i - base_batch}/{num_checkpoints} (batch {i})")
-            print(f"       Load: {load_time:.4f}s | Decompress: {decompress_time:.4f}s | Apply: {apply_time:.4f}s | Total: {iter_time:.4f}s")
+        if processed % 5 == 0 or processed == len(file_list):
+            print(f"[PERF] Processed {processed}/{len(file_list)} checkpoints (batch {batch_idx})")
+
+    # 等待线程结束
+    loader.join(timeout=5)
+    decompressor.join(timeout=5)
 
     recovery_end = time.time()
-    total_recovery_time = recovery_end - recovery_start
+    total_time = recovery_end - recovery_start
 
-    # ========== PERF: Summary ==========
-    print(f"\n[PERF] ========== Serial Recovery Summary ==========")
-    print(f"[PERF] Total recovery time: {total_recovery_time:.3f}s")
-    print(f"[PERF] Checkpoints processed: {len(recovery_times)}")
-
-    if recovery_times:
-        total_load = sum(load_times)
-        total_decompress = sum(decompress_times)
-        total_apply = sum(apply_times)
-
-        print(f"\n[PERF] Time breakdown:")
-        if total_recovery_time > 0:
-            print(f"[PERF]   - Total load time:       {total_load:.3f}s ({total_load/total_recovery_time*100:.1f}%)")
-            print(f"[PERF]   - Total decompress time: {total_decompress:.3f}s ({total_decompress/total_recovery_time*100:.1f}%)")
-            print(f"[PERF]   - Total apply time:      {total_apply:.3f}s ({total_apply/total_recovery_time*100:.1f}%)")
-
-        if len(recovery_times) > 0:
-            print(f"\n[PERF] Average per checkpoint:")
-            print(f"[PERF]   - Load:       {total_load/len(recovery_times):.4f}s")
-            print(f"[PERF]   - Decompress: {total_decompress/len(recovery_times):.4f}s")
-            print(f"[PERF]   - Apply:      {total_apply/len(recovery_times):.4f}s")
-            print(f"[PERF]   - Total:      {sum(recovery_times)/len(recovery_times):.4f}s")
-
-        print(f"\n[PERF] Performance stats:")
-        print(f"[PERF]   - Min checkpoint time: {min(recovery_times):.4f}s")
-        print(f"[PERF]   - Max checkpoint time: {max(recovery_times):.4f}s")
-
+    # Summary
+    print(f"\n[PERF] ========== Pipeline Recovery Summary ==========")
+    print(f"[PERF] Total recovery time: {total_time:.3f}s")
+    print(f"[PERF] Checkpoints processed: {processed}")
+    if apply_times:
+        print(f"[PERF] Average apply time: {sum(apply_times)/len(apply_times):.4f}s")
     print(f"[PERF] ==================================================")
     print(f"{'='*80}\n")
 
-    # 返回最后恢复到的 batch 编号
-    last_batch = iterations if iterations != -1 else base_batch
     return model, optimizer, last_batch
 
-def load_batch_differential_checkpoint(model, optimizer, base_batch):  # 新增参数
+
+def load_batch_differential_checkpoint_pipeline(model, optimizer, base_batch, buffer_size=2):
     """
-    Load batched differential checkpoints for more efficient recovery (SERIAL version).
+    流水线版本：Load batched differential checkpoints with I/O and compute overlap.
 
     Args:
         base_batch (int): The batch number of the base checkpoint.
-                         Start replaying from the first batch after base_batch.
+        buffer_size (int): Pipeline buffer size (default 2 to prevent OOM).
     """
     print(f"\n{'='*80}")
-    print(f"[PERF] ========== Serial Batch Differential Checkpoint Recovery ==========")
+    print(f"[PERF] ========== Pipeline Batch Differential Checkpoint Recovery ==========")
+    print(f"[PERF] Buffer size: {buffer_size}")
     print(f"{'='*80}\n")
+
+    import queue
+    import threading
 
     recovery_start = time.time()
     filedir = args.save_dir
     _parameter_names = {name: param for name, param in model.named_parameters()}
 
-    # ========== PERF: Find Checkpoints ==========
-    find_start = time.time()
+    # Find checkpoints
     iterations = find_max(base_batch)
-    find_end = time.time()
-
     if iterations == -1:
-        print("[PERF] WARNING: No differential checkpoints found")
         return model, optimizer, base_batch
 
-    print(f"[PERF] Found checkpoints up to batch {iterations}")
-    print(f"[PERF] Base batch: {base_batch}")
-    print(f"[PERF] Checkpoint discovery time: {find_end - find_start:.3f}s\n")
-
-    # 计算第一个需要加载的批次
-    # 找到 base_batch 之后的第一个批次边界
+    # 计算批次文件列表
     first_batch = ((base_batch // args.save_batch_freq) + 1) * args.save_batch_freq - 1
-
-    # ========== PERF: Data Preparation ==========
-    data_prep_start = time.time()
-    print(f"[PERF] ========== Data Preparation Stage ==========")
-    print(f"[PERF] Batch frequency: {args.save_batch_freq}")
-    print(f"[PERF] First batch to load: {first_batch}\n")
-
     batch_files = []
-    total_data_size = 0
 
     for i in range(first_batch, iterations + 1, args.save_batch_freq):
         filepath = filedir + '/{}_{}_{}_{}_{}-{}_batch{}.pth.tar'.format(
             args.model, args.dataset, args.compressor, args.compressor_ratio,
             args.resume-1, i, args.save_batch_freq
         )
-
         if os.path.exists(filepath):
-            file_size_mb = os.path.getsize(filepath) / (1024**2)
-            total_data_size += file_size_mb
-            batch_files.append((i, filepath, file_size_mb))
-            print(f"[PERF] Found batch file: {os.path.basename(filepath)} ({file_size_mb:.2f} MB)")
-        else:
-            print(f"[PERF] WARNING: Batch file not found: {os.path.basename(filepath)}")
+            batch_files.append((i, filepath))
 
-    data_prep_end = time.time()
-    data_prep_time = data_prep_end - data_prep_start
-
-    print(f"\n[PERF] Data preparation completed in {data_prep_time:.3f}s")
-    print(f"[PERF] Total batch files: {len(batch_files)}")
-    print(f"[PERF] Total data size: ~{total_data_size:.2f} MB\n")
-
-    if len(batch_files) == 0:
-        print("[PERF] ERROR: No batch files found")
+    if not batch_files:
         return model, optimizer, base_batch
 
-    # ========== PERF: Serial Recovery Loop ==========
-    print(f"[PERF] ========== Starting Serial Batch Recovery Loop ==========\n")
+    print(f"[PERF] Found {len(batch_files)} batch files\n")
 
-    batch_recovery_times = []
-    file_load_times = []
-    checkpoint_apply_times = []
-    checkpoints_processed = 0
+    # 队列
+    load_queue = queue.Queue(maxsize=buffer_size)
+    exception_holder = [None]
 
-    # 从 first_batch 开始，每隔 save_batch_freq 加载一次
-    for idx, (file_batch_idx, filepath, file_size_mb) in enumerate(batch_files):
-        batch_start = time.time()
+    # 加载线程
+    def loader_thread():
+        try:
+            for file_batch_idx, filepath in batch_files:
+                checkpoint = torch.load(filepath, map_location='cpu')
+                load_queue.put((file_batch_idx, checkpoint))
+            load_queue.put(None)
+        except Exception as e:
+            exception_holder[0] = e
+            load_queue.put(None)
 
-        # Load batch file
-        load_start = time.time()
-        print(f"[PERF] Loading batch file {idx+1}/{len(batch_files)}: {os.path.basename(filepath)}")
-        tensor_compressed = torch.load(filepath, map_location='cpu')
-        load_end = time.time()
-        load_time = load_end - load_start
-        file_load_times.append(load_time)
+    loader = threading.Thread(target=loader_thread, daemon=True)
+    loader.start()
 
-        if load_time > 0:
-            print(f"       File size: {file_size_mb:.2f} MB | Load time: {load_time:.3f}s | Speed: {file_size_mb/load_time:.2f} MB/s")
-        else:
-            print(f"       File size: {file_size_mb:.2f} MB | Load time: {load_time:.3f}s")
+    # 主线程：解压并应用（保证顺序）
+    print(f"[PERF] ========== Starting Pipeline Batch Recovery ==========\n")
 
-        # Process checkpoints in this batch
-        ckpts_in_batch = 0
+    last_batch = base_batch
+    processed_files = 0
+
+    while True:
+        if exception_holder[0]:
+            raise exception_holder[0]
+
+        item = load_queue.get()
+        if item is None:
+            break
+
+        file_batch_idx, checkpoint = item
+        processed_files += 1
+
+        print(f"[PERF] Processing batch file {processed_files}/{len(batch_files)} (up to batch {file_batch_idx})")
+
+        # 按顺序处理该批次中的所有检查点
         for j in range(file_batch_idx - args.save_batch_freq + 1, file_batch_idx + 1):
-            # 只回放 base_batch 之后的差分检查点
-            if j <= base_batch:
+            if j <= base_batch or j not in checkpoint:
                 continue
 
-            if j not in tensor_compressed:
-                print(f"       WARNING: Iteration {j} not found in batch checkpoint, skipping...")
-                continue
-
-            # Decompress and apply
-            apply_start = time.time()
-            for key in tensor_compressed[j].keys():
+            # 解压并应用
+            for key in checkpoint[j].keys():
                 tensor = topk_decompress(
-                    tensor_compressed[j][key]['values'],
-                    tensor_compressed[j][key]['indices'],
-                    tensor_compressed[j][key]['shape']
+                    checkpoint[j][key]['values'],
+                    checkpoint[j][key]['indices'],
+                    checkpoint[j][key]['shape']
                 )
                 param = _parameter_names.get(key)
                 if param is not None:
@@ -842,59 +843,22 @@ def load_batch_differential_checkpoint(model, optimizer, base_batch):  # 新增�
                         tensor = tensor.to(param.dtype)
                     param.grad = tensor
             optimizer.step()
-            apply_end = time.time()
+            last_batch = j
 
-            checkpoint_apply_times.append(apply_end - apply_start)
-            ckpts_in_batch += 1
-            checkpoints_processed += 1
-
-        batch_end = time.time()
-        batch_time = batch_end - batch_start
-        batch_recovery_times.append(batch_time)
-
-        print(f"       Checkpoints in batch: {ckpts_in_batch}")
-        print(f"       Batch processing time: {batch_time:.3f}s\n")
+    loader.join(timeout=5)
 
     recovery_end = time.time()
-    total_recovery_time = recovery_end - recovery_start
+    total_time = recovery_end - recovery_start
 
-    # ========== PERF: Final Summary ==========
-    print(f"[PERF] ========== FINAL PERFORMANCE SUMMARY ==========")
-    print(f"[PERF] Total recovery time: {total_recovery_time:.3f}s")
-    print(f"[PERF] ")
-    print(f"[PERF] Time breakdown:")
-    if total_recovery_time > 0:
-        print(f"[PERF]   1. Data preparation:      {data_prep_time:.3f}s ({data_prep_time/total_recovery_time*100:.1f}%)")
-        print(f"[PERF]   2. File loading:          {sum(file_load_times):.3f}s ({sum(file_load_times)/total_recovery_time*100:.1f}%)")
-        print(f"[PERF]   3. Checkpoint application: {sum(checkpoint_apply_times):.3f}s ({sum(checkpoint_apply_times)/total_recovery_time*100:.1f}%)")
-    print(f"[PERF] ")
-    print(f"[PERF] Data statistics:")
-    print(f"[PERF]   - Batch files loaded: {len(batch_files)}")
-    print(f"[PERF]   - Checkpoints processed: {checkpoints_processed}")
-    print(f"[PERF]   - Total data size: ~{total_data_size:.2f} MB")
-    if total_recovery_time > 0:
-        print(f"[PERF]   - Effective throughput: {total_data_size/total_recovery_time:.2f} MB/s")
-
-    if checkpoint_apply_times:
-        print(f"\n[PERF] Per-checkpoint statistics:")
-        if len(checkpoint_apply_times) > 0:
-            print(f"[PERF]   - Average apply time: {sum(checkpoint_apply_times)/len(checkpoint_apply_times):.4f}s")
-            print(f"[PERF]   - Min apply time: {min(checkpoint_apply_times):.4f}s")
-            print(f"[PERF]   - Max apply time: {max(checkpoint_apply_times):.4f}s")
-
-    if batch_recovery_times:
-        print(f"\n[PERF] Per-batch-file statistics:")
-        if len(batch_recovery_times) > 0:
-            print(f"[PERF]   - Average batch time: {sum(batch_recovery_times)/len(batch_recovery_times):.3f}s")
-            print(f"[PERF]   - Min batch time: {min(batch_recovery_times):.3f}s")
-            print(f"[PERF]   - Max batch time: {max(batch_recovery_times):.3f}s")
-
+    print(f"\n[PERF] ========== Pipeline Batch Recovery Summary ==========")
+    print(f"[PERF] Total recovery time: {total_time:.3f}s")
+    print(f"[PERF] Batch files processed: {processed_files}")
+    print(f"[PERF] Last batch: {last_batch}")
     print(f"[PERF] ==================================================")
     print(f"{'='*80}\n")
 
-    # 返回最后恢复到的 batch 编号
-    last_batch = iterations if iterations != -1 else base_batch
     return model, optimizer, last_batch
+
 
 if __name__ == '__main__':
     main()

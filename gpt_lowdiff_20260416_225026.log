@@ -1,0 +1,1028 @@
+======================================================================
+LOWDIFF TRAINING LOG
+======================================================================
+Script: gpt_lowdiff.sh
+Start Time: 2026-04-16 22:50:26
+Hostname: node30
+User: xiekunpeng
+Working Directory: /mnt/newdisk/xiekunpeng/LowDiff
+======================================================================
+
+======================================================================
+LowDiff Training (With Compression & Differential Checkpoints)
+======================================================================
+Dataset: wikitext-2
+Model: gpt2
+Batch Size: 4 per GPU
+Total Batch Size: 16
+Epochs: 1
+Number of GPUs: 4
+Save Directory: /mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff
+Log File: /mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff/gpt_lowdiff_20260416_225026.log
+======================================================================
+
+LowDiff Configuration:
+  - Compressor: topk
+  - Compression Ratio: 0.01
+  - Full Checkpoint Frequency: every 100 iterations (max interval)
+  - Differential Checkpoint Frequency: every 20 iterations
+  - Smart Checkpoint: DISABLED
+
+Fault Tolerance Configuration:
+  - Optimizer Monitoring: ENABLED
+  - Safety Factor: 1.0
+  - Legacy Fault Injection: DISABLED
+
+SDC Injection Configuration:
+  - SDC Injection: ENABLED
+  - Injection Probability: 0.02 (per batch)
+  - Magnitude: 100.0x grad_std
+  - Param Fraction: 0.1
+
+Poisson-based Fault Injection:
+  - Fault Injection: DISABLED
+
+Starting training at 2026年 04月 16日 星期四 22:50:26 CST...
+======================================================================
+
+
+=== System Information ===
+GPU Information:
+0, NVIDIA GeForce RTX 3090, 24576 MiB, 24121 MiB
+1, NVIDIA GeForce RTX 3090, 24576 MiB, 24121 MiB
+2, NVIDIA GeForce RTX 3090, 24576 MiB, 24121 MiB
+3, NVIDIA GeForce RTX 3090, 24576 MiB, 24121 MiB
+
+Python Version:
+Python 3.10.19
+
+PyTorch Version:
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+PyTorch: 2.6.0+cu124
+CUDA Available: True
+CUDA Version: 12.4
+
+DeepSpeed Version:
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:50:36,528] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+DeepSpeed: 0.16.4
+
+======================================================================
+
+Starting DeepSpeed training with 4 GPUs...
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:50:46,284] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2026-04-16 22:50:50,036] [WARNING] [runner.py:215:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2026-04-16 22:50:50,037] [INFO] [runner.py:607:main] cmd = /mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/bin/python3.10 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMCwgMSwgMiwgM119 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None ./torch/GPT.py --dataset wikitext-2 --model gpt2 --epochs 1 --batch-size 4 --compressor topk --compressor_ratio 0.01 --freq 100 --save-batch-freq 20 --save-dir /mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff --resume 0 --diff --enable-optimizer-monitoring --monitoring-safety-factor 1.0 --enable-sdc-injection --sdc-inject-prob 0.02 --sdc-magnitude 100.0 --sdc-param-fraction 0.1
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:50:52,109] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2026-04-16 22:50:55,814] [INFO] [launch.py:139:main] 0 NCCL_IB_DISABLE=1
+[2026-04-16 22:50:55,814] [INFO] [launch.py:146:main] WORLD INFO DICT: {'localhost': [0, 1, 2, 3]}
+[2026-04-16 22:50:55,814] [INFO] [launch.py:152:main] nnodes=1, num_local_procs=4, node_rank=0
+[2026-04-16 22:50:55,814] [INFO] [launch.py:163:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1, 2, 3]})
+[2026-04-16 22:50:55,814] [INFO] [launch.py:164:main] dist_world_size=4
+[2026-04-16 22:50:55,814] [INFO] [launch.py:168:main] Setting CUDA_VISIBLE_DEVICES=0,1,2,3
+[2026-04-16 22:50:55,815] [INFO] [launch.py:256:main] process 532023 spawned with command: ['/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/bin/python3.10', '-u', './torch/GPT.py', '--local_rank=0', '--dataset', 'wikitext-2', '--model', 'gpt2', '--epochs', '1', '--batch-size', '4', '--compressor', 'topk', '--compressor_ratio', '0.01', '--freq', '100', '--save-batch-freq', '20', '--save-dir', '/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff', '--resume', '0', '--diff', '--enable-optimizer-monitoring', '--monitoring-safety-factor', '1.0', '--enable-sdc-injection', '--sdc-inject-prob', '0.02', '--sdc-magnitude', '100.0', '--sdc-param-fraction', '0.1']
+[2026-04-16 22:50:55,816] [INFO] [launch.py:256:main] process 532024 spawned with command: ['/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/bin/python3.10', '-u', './torch/GPT.py', '--local_rank=1', '--dataset', 'wikitext-2', '--model', 'gpt2', '--epochs', '1', '--batch-size', '4', '--compressor', 'topk', '--compressor_ratio', '0.01', '--freq', '100', '--save-batch-freq', '20', '--save-dir', '/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff', '--resume', '0', '--diff', '--enable-optimizer-monitoring', '--monitoring-safety-factor', '1.0', '--enable-sdc-injection', '--sdc-inject-prob', '0.02', '--sdc-magnitude', '100.0', '--sdc-param-fraction', '0.1']
+[2026-04-16 22:50:55,816] [INFO] [launch.py:256:main] process 532025 spawned with command: ['/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/bin/python3.10', '-u', './torch/GPT.py', '--local_rank=2', '--dataset', 'wikitext-2', '--model', 'gpt2', '--epochs', '1', '--batch-size', '4', '--compressor', 'topk', '--compressor_ratio', '0.01', '--freq', '100', '--save-batch-freq', '20', '--save-dir', '/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff', '--resume', '0', '--diff', '--enable-optimizer-monitoring', '--monitoring-safety-factor', '1.0', '--enable-sdc-injection', '--sdc-inject-prob', '0.02', '--sdc-magnitude', '100.0', '--sdc-param-fraction', '0.1']
+[2026-04-16 22:50:55,817] [INFO] [launch.py:256:main] process 532026 spawned with command: ['/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/bin/python3.10', '-u', './torch/GPT.py', '--local_rank=3', '--dataset', 'wikitext-2', '--model', 'gpt2', '--epochs', '1', '--batch-size', '4', '--compressor', 'topk', '--compressor_ratio', '0.01', '--freq', '100', '--save-batch-freq', '20', '--save-dir', '/mnt/newdisk/xiekunpeng/LowDiff/data/lowdiff', '--resume', '0', '--diff', '--enable-optimizer-monitoring', '--monitoring-safety-factor', '1.0', '--enable-sdc-injection', '--sdc-inject-prob', '0.02', '--sdc-magnitude', '100.0', '--sdc-param-fraction', '0.1']
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:50:58,198] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:50:58,219] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:50:58,337] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:50:58,349] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2026-04-16 22:51:03,842] [INFO] [comm.py:658:init_distributed] cdb=None
+[2026-04-16 22:51:03,845] [INFO] [comm.py:658:init_distributed] cdb=None
+[2026-04-16 22:51:03,845] [INFO] [comm.py:689:init_distributed] Initializing TorchBackend in DeepSpeed with backend nccl
+[2026-04-16 22:51:03,845] [INFO] [comm.py:658:init_distributed] cdb=None
+[2026-04-16 22:51:03,846] [INFO] [comm.py:658:init_distributed] cdb=None
+[rank3]:[W416 22:51:04.671914901 ProcessGroupNCCL.cpp:4561] [PG ID 0 PG GUID 0 Rank 3]  using GPU 3 to perform barrier as devices used by this process are currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. Specify device_ids in barrier() to force use of a particular device, or call init_process_group() with a device_id.
+[rank1]:[W416 22:51:04.003451893 ProcessGroupNCCL.cpp:4561] [PG ID 0 PG GUID 0 Rank 1]  using GPU 1 to perform barrier as devices used by this process are currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. Specify device_ids in barrier() to force use of a particular device, or call init_process_group() with a device_id.
+[rank2]:[W416 22:51:04.176119894 ProcessGroupNCCL.cpp:4561] [PG ID 0 PG GUID 0 Rank 2]  using GPU 2 to perform barrier as devices used by this process are currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. Specify device_ids in barrier() to force use of a particular device, or call init_process_group() with a device_id.
+[rank0]:[W416 22:51:05.188136747 ProcessGroupNCCL.cpp:4561] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 to perform barrier as devices used by this process are currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. Specify device_ids in barrier() to force use of a particular device, or call init_process_group() with a device_id.
+[Rank 1/4] Initialized DeepSpeed
+[Rank 0/4] Initialized DeepSpeed
+[Rank 3/4] Initialized DeepSpeed[Rank 2/4] Initialized DeepSpeed
+
+Tokenizer loaded successfully.
+Tokenizer loaded successfully.
+Tokenizer loaded successfully.
+Tokenizer loaded successfully.
+Map (num_proc=12):   0%|          | 0/60485 [00:00<?, ? examples/s]Map (num_proc=12):   0%|          | 0/60485 [00:00<?, ? examples/s]Map (num_proc=12):   0%|          | 0/60485 [00:00<?, ? examples/s]Map (num_proc=12):   0%|          | 0/60485 [00:00<?, ? examples/s]Map (num_proc=12):   2%|▏         | 1000/60485 [00:02<02:03, 481.31 examples/s]Map (num_proc=12):   2%|▏         | 1000/60485 [00:02<02:05, 474.62 examples/s]Map (num_proc=12):   2%|▏         | 1000/60485 [00:02<02:07, 466.34 examples/s]Map (num_proc=12):   2%|▏         | 1000/60485 [00:02<02:10, 457.32 examples/s]Map (num_proc=12):   3%|▎         | 2000/60485 [00:02<01:13, 799.11 examples/s]Map (num_proc=12):   3%|▎         | 2000/60485 [00:02<01:14, 781.13 examples/s]Map (num_proc=12):   3%|▎         | 2000/60485 [00:02<01:15, 779.29 examples/s]Map (num_proc=12):   3%|▎         | 2000/60485 [00:02<01:15, 770.48 examples/s]Map (num_proc=12):   5%|▍         | 3000/60485 [00:03<00:50, 1145.51 examples/s]Map (num_proc=12):   5%|▍         | 3000/60485 [00:03<00:50, 1130.39 examples/s]Map (num_proc=12):   5%|▍         | 3000/60485 [00:03<00:52, 1104.23 examples/s]Map (num_proc=12):   5%|▍         | 3000/60485 [00:03<00:53, 1084.02 examples/s]Map (num_proc=12):   7%|▋         | 4000/60485 [00:03<00:34, 1632.70 examples/s]Map (num_proc=12):   7%|▋         | 4000/60485 [00:03<00:35, 1584.38 examples/s]Map (num_proc=12):   7%|▋         | 4000/60485 [00:03<00:35, 1595.19 examples/s]Map (num_proc=12):   7%|▋         | 4000/60485 [00:03<00:35, 1604.28 examples/s]Map (num_proc=12):   8%|▊         | 5000/60485 [00:03<00:29, 1862.53 examples/s]Map (num_proc=12):   8%|▊         | 5000/60485 [00:03<00:30, 1818.15 examples/s]Map (num_proc=12):   8%|▊         | 5000/60485 [00:03<00:32, 1716.09 examples/s]Map (num_proc=12):   8%|▊         | 5000/60485 [00:03<00:31, 1735.91 examples/s]Map (num_proc=12):  10%|▉         | 6000/60485 [00:04<00:22, 2379.70 examples/s]Map (num_proc=12):  10%|▉         | 6000/60485 [00:04<00:24, 2259.54 examples/s]Map (num_proc=12):  10%|▉         | 6000/60485 [00:04<00:23, 2285.69 examples/s]Map (num_proc=12):  10%|▉         | 6000/60485 [00:04<00:26, 2034.54 examples/s]Map (num_proc=12):  12%|█▏        | 7000/60485 [00:04<00:20, 2653.54 examples/s]Map (num_proc=12):  12%|█▏        | 7000/60485 [00:04<00:20, 2611.69 examples/s]Map (num_proc=12):  12%|█▏        | 7000/60485 [00:04<00:22, 2401.74 examples/s]Map (num_proc=12):  12%|█▏        | 7000/60485 [00:04<00:20, 2589.14 examples/s]Map (num_proc=12):  13%|█▎        | 8000/60485 [00:04<00:16, 3206.45 examples/s]Map (num_proc=12):  15%|█▍        | 9000/60485 [00:04<00:17, 2930.75 examples/s]Map (num_proc=12):  15%|█▍        | 9000/60485 [00:05<00:19, 2619.62 examples/s]Map (num_proc=12):  15%|█▍        | 9000/60485 [00:05<00:18, 2838.63 examples/s]Map (num_proc=12):  15%|█▍        | 9000/60485 [00:05<00:18, 2827.06 examples/s]Map (num_proc=12):  17%|█▋        | 10000/60485 [00:05<00:14, 3419.81 examples/s]Map (num_proc=12):  18%|█▊        | 11000/60485 [00:05<00:13, 3764.01 examples/s]Map (num_proc=12):  18%|█▊        | 11000/60485 [00:05<00:13, 3694.23 examples/s]Map (num_proc=12):  18%|█▊        | 11000/60485 [00:05<00:13, 3720.75 examples/s]Map (num_proc=12):  20%|█▉        | 12000/60485 [00:05<00:11, 4169.01 examples/s]Map (num_proc=12):  18%|█▊        | 11000/60485 [00:05<00:13, 3571.49 examples/s]Map (num_proc=12):  20%|█▉        | 12000/60485 [00:05<00:10, 4499.46 examples/s]Map (num_proc=12):  20%|█▉        | 12041/60485 [00:05<00:12, 3809.19 examples/s]Map (num_proc=12):  22%|██▏       | 13041/60485 [00:05<00:11, 4174.51 examples/s]Map (num_proc=12):  22%|██▏       | 13041/60485 [00:05<00:10, 4523.36 examples/s]Map (num_proc=12):  20%|█▉        | 12041/60485 [00:05<00:13, 3560.16 examples/s]Map (num_proc=12):  22%|██▏       | 13041/60485 [00:05<00:12, 3914.02 examples/s]Map (num_proc=12):  23%|██▎       | 14041/60485 [00:05<00:11, 4101.58 examples/s]Map (num_proc=12):  23%|██▎       | 14041/60485 [00:05<00:10, 4592.67 examples/s]Map (num_proc=12):  23%|██▎       | 14041/60485 [00:05<00:11, 4002.22 examples/s]Map (num_proc=12):  25%|██▍       | 15082/60485 [00:06<00:09, 4832.54 examples/s]Map (num_proc=12):  25%|██▍       | 15082/60485 [00:06<00:08, 5097.01 examples/s]Map (num_proc=12):  23%|██▎       | 14041/60485 [00:06<00:11, 3952.13 examples/s]Map (num_proc=12):  27%|██▋       | 16082/60485 [00:06<00:09, 4483.68 examples/s]Map (num_proc=12):  27%|██▋       | 16082/60485 [00:06<00:08, 4998.21 examples/s]Map (num_proc=12):  25%|██▍       | 15082/60485 [00:06<00:11, 4047.58 examples/s]Map (num_proc=12):  27%|██▋       | 16082/60485 [00:06<00:10, 4121.75 examples/s]Map (num_proc=12):  28%|██▊       | 17082/60485 [00:06<00:08, 5265.43 examples/s]Map (num_proc=12):  28%|██▊       | 17082/60485 [00:06<00:08, 4925.09 examples/s]Map (num_proc=12):  28%|██▊       | 17082/60485 [00:06<00:10, 4069.92 examples/s]Map (num_proc=12):  30%|██▉       | 18082/60485 [00:06<00:07, 5347.67 examples/s]Map (num_proc=12):  28%|██▊       | 17082/60485 [00:06<00:08, 5047.21 examples/s]Map (num_proc=12):  30%|██▉       | 18082/60485 [00:06<00:07, 5388.87 examples/s]Map (num_proc=12):  32%|███▏      | 19082/60485 [00:07<00:11, 3615.90 examples/s]Map (num_proc=12):  30%|██▉       | 18082/60485 [00:07<00:11, 3775.18 examples/s]Map (num_proc=12):  32%|███▏      | 19082/60485 [00:07<00:10, 3812.80 examples/s]Map (num_proc=12):  32%|███▏      | 19082/60485 [00:07<00:11, 3581.01 examples/s]Map (num_proc=12):  35%|███▍      | 21123/60485 [00:07<00:07, 5608.04 examples/s]Map (num_proc=12):  35%|███▍      | 21123/60485 [00:07<00:07, 5557.23 examples/s]Map (num_proc=12):  33%|███▎      | 20082/60485 [00:07<00:09, 4369.44 examples/s]Map (num_proc=12):  32%|███▏      | 19082/60485 [00:07<00:10, 3974.52 examples/s]Map (num_proc=12):  33%|███▎      | 20123/60485 [00:07<00:08, 4538.10 examples/s]Map (num_proc=12):  37%|███▋      | 22123/60485 [00:07<00:07, 5032.93 examples/s]Map (num_proc=12):  37%|███▋      | 22123/60485 [00:07<00:08, 4549.14 examples/s]Map (num_proc=12):  38%|███▊      | 23123/60485 [00:07<00:07, 4782.44 examples/s]Map (num_proc=12):  35%|███▍      | 21123/60485 [00:07<00:09, 4244.37 examples/s]Map (num_proc=12):  37%|███▋      | 22123/60485 [00:07<00:10, 3708.08 examples/s]Map (num_proc=12):  38%|███▊      | 23123/60485 [00:07<00:06, 5708.99 examples/s]Map (num_proc=12):  40%|███▉      | 24123/60485 [00:08<00:09, 3904.49 examples/s]Map (num_proc=12):  40%|███▉      | 24123/60485 [00:08<00:08, 4377.01 examples/s]Map (num_proc=12):  40%|███▉      | 24123/60485 [00:08<00:08, 4124.83 examples/s]Map (num_proc=12):  43%|████▎     | 26164/60485 [00:08<00:06, 4952.39 examples/s]Map (num_proc=12):  42%|████▏     | 25164/60485 [00:08<00:07, 4544.48 examples/s]Map (num_proc=12):  40%|███▉      | 24123/60485 [00:08<00:09, 3956.20 examples/s]Map (num_proc=12):  42%|████▏     | 25164/60485 [00:08<00:08, 4086.86 examples/s]Map (num_proc=12):  45%|████▍     | 27164/60485 [00:08<00:06, 5166.06 examples/s]Map (num_proc=12):  45%|████▍     | 27164/60485 [00:08<00:06, 5517.44 examples/s]Map (num_proc=12):  43%|████▎     | 26123/60485 [00:08<00:06, 5306.89 examples/s]Map (num_proc=12):  45%|████▍     | 27164/60485 [00:08<00:06, 4889.77 examples/s]Map (num_proc=12):  47%|████▋     | 28164/60485 [00:08<00:06, 4915.29 examples/s]Map (num_proc=12):  47%|████▋     | 28164/60485 [00:09<00:07, 4606.33 examples/s]Map (num_proc=12):  47%|████▋     | 28164/60485 [00:09<00:06, 5063.14 examples/s]Map (num_proc=12):  47%|████▋     | 28164/60485 [00:09<00:08, 4027.61 examples/s]Map (num_proc=12):  48%|████▊     | 29164/60485 [00:09<00:08, 3745.54 examples/s]Map (num_proc=12):  48%|████▊     | 29164/60485 [00:09<00:07, 4135.16 examples/s]Map (num_proc=12):  48%|████▊     | 29164/60485 [00:09<00:07, 4419.42 examples/s]Map (num_proc=12):  48%|████▊     | 29164/60485 [00:09<00:06, 4634.75 examples/s]Map (num_proc=12):  50%|████▉     | 30164/60485 [00:09<00:06, 4385.51 examples/s]Map (num_proc=12):  50%|████▉     | 30205/60485 [00:09<00:05, 5270.18 examples/s]Map (num_proc=12):  52%|█████▏    | 31205/60485 [00:09<00:05, 5190.98 examples/s]Map (num_proc=12):  53%|█████▎    | 32205/60485 [00:09<00:05, 5247.54 examples/s]Map (num_proc=12):  52%|█████▏    | 31205/60485 [00:09<00:05, 5163.01 examples/s]Map (num_proc=12):  52%|█████▏    | 31205/60485 [00:09<00:06, 4541.45 examples/s]Map (num_proc=12):  53%|█████▎    | 32205/60485 [00:09<00:05, 4993.32 examples/s]Map (num_proc=12):  53%|█████▎    | 32205/60485 [00:09<00:04, 5710.03 examples/s]Map (num_proc=12):  55%|█████▍    | 33205/60485 [00:09<00:05, 4739.94 examples/s]Map (num_proc=12):  53%|█████▎    | 32205/60485 [00:09<00:05, 4722.46 examples/s]Map (num_proc=12):  55%|█████▍    | 33205/60485 [00:10<00:05, 4909.48 examples/s]Map (num_proc=12):  55%|█████▍    | 33205/60485 [00:10<00:05, 5039.96 examples/s]Map (num_proc=12):  57%|█████▋    | 34205/60485 [00:10<00:06, 4126.68 examples/s]Map (num_proc=12):  57%|█████▋    | 34205/60485 [00:10<00:06, 4004.11 examples/s]Map (num_proc=12):  57%|█████▋    | 34205/60485 [00:10<00:07, 3732.95 examples/s]Map (num_proc=12):  58%|█████▊    | 35205/60485 [00:10<00:05, 4556.96 examples/s]Map (num_proc=12):  60%|█████▉    | 36245/60485 [00:10<00:05, 4806.68 examples/s]Map (num_proc=12):  57%|█████▋    | 34205/60485 [00:10<00:06, 3809.51 examples/s]Map (num_proc=12):  60%|█████▉    | 36245/60485 [00:10<00:04, 5147.53 examples/s]Map (num_proc=12):  62%|██████▏   | 37245/60485 [00:10<00:03, 5891.37 examples/s]Map (num_proc=12):  63%|██████▎   | 38245/60485 [00:10<00:04, 5323.05 examples/s]Map (num_proc=12):  62%|██████▏   | 37245/60485 [00:10<00:04, 4695.02 examples/s]Map (num_proc=12):  63%|██████▎   | 38245/60485 [00:11<00:04, 5479.91 examples/s]Map (num_proc=12):  63%|██████▎   | 38245/60485 [00:11<00:04, 4902.05 examples/s]Map (num_proc=12):  62%|██████▏   | 37245/60485 [00:11<00:04, 4735.37 examples/s]Map (num_proc=12):  63%|██████▎   | 38245/60485 [00:11<00:04, 4864.68 examples/s]Map (num_proc=12):  65%|██████▍   | 39245/60485 [00:11<00:05, 4112.02 examples/s]Map (num_proc=12):  65%|██████▍   | 39245/60485 [00:11<00:05, 4124.20 examples/s]Map (num_proc=12):  68%|██████▊   | 41245/60485 [00:11<00:03, 5079.69 examples/s]Map (num_proc=12):  65%|██████▍   | 39245/60485 [00:11<00:06, 3526.68 examples/s]Map (num_proc=12):  68%|██████▊   | 41245/60485 [00:11<00:03, 5593.70 examples/s]Map (num_proc=12):  65%|██████▍   | 39245/60485 [00:11<00:05, 4184.56 examples/s]Map (num_proc=12):  67%|██████▋   | 40285/60485 [00:11<00:04, 4703.46 examples/s]Map (num_proc=12):  70%|██████▉   | 42285/60485 [00:11<00:03, 4724.71 examples/s]Map (num_proc=12):  70%|██████▉   | 42285/60485 [00:12<00:03, 4552.05 examples/s]Map (num_proc=12):  72%|███████▏  | 43285/60485 [00:12<00:03, 4989.25 examples/s]Map (num_proc=12):  70%|██████▉   | 42285/60485 [00:12<00:03, 4723.54 examples/s]Map (num_proc=12):  72%|███████▏  | 43285/60485 [00:12<00:03, 5087.68 examples/s]Map (num_proc=12):  70%|██████▉   | 42285/60485 [00:12<00:03, 4881.05 examples/s]Map (num_proc=12):  72%|███████▏  | 43285/60485 [00:12<00:03, 4611.84 examples/s]Map (num_proc=12):  73%|███████▎  | 44285/60485 [00:12<00:03, 4619.47 examples/s]Map (num_proc=12):  73%|███████▎  | 44285/60485 [00:12<00:03, 4594.31 examples/s]Map (num_proc=12):  72%|███████▏  | 43285/60485 [00:12<00:03, 4425.47 examples/s]Map (num_proc=12):  75%|███████▍  | 45325/60485 [00:12<00:03, 4909.64 examples/s]Map (num_proc=12):  73%|███████▎  | 44285/60485 [00:12<00:03, 4604.03 examples/s]Map (num_proc=12):  75%|███████▍  | 45325/60485 [00:12<00:03, 4977.61 examples/s]Map (num_proc=12):  73%|███████▎  | 44285/60485 [00:12<00:03, 4795.47 examples/s]Map (num_proc=12):  75%|███████▍  | 45325/60485 [00:12<00:02, 5245.36 examples/s]Map (num_proc=12):  77%|███████▋  | 46325/60485 [00:12<00:02, 5154.53 examples/s]Map (num_proc=12):  77%|███████▋  | 46325/60485 [00:12<00:02, 5233.76 examples/s]Map (num_proc=12):  75%|███████▍  | 45325/60485 [00:12<00:02, 5376.62 examples/s]Map (num_proc=12):  77%|███████▋  | 46325/60485 [00:12<00:03, 4655.01 examples/s]Map (num_proc=12):  78%|███████▊  | 47325/60485 [00:13<00:03, 4031.31 examples/s]Map (num_proc=12):  77%|███████▋  | 46325/60485 [00:13<00:03, 4483.78 examples/s]Map (num_proc=12):  80%|███████▉  | 48325/60485 [00:13<00:02, 4612.71 examples/s]Map (num_proc=12):  78%|███████▊  | 47325/60485 [00:13<00:03, 3787.53 examples/s]Map (num_proc=12):  78%|███████▊  | 47325/60485 [00:13<00:03, 3901.82 examples/s]Map (num_proc=12):  78%|███████▊  | 47325/60485 [00:13<00:03, 4061.03 examples/s]Map (num_proc=12):  82%|████████▏ | 49325/60485 [00:13<00:02, 3756.58 examples/s]Map (num_proc=12):  82%|████████▏ | 49325/60485 [00:13<00:02, 3938.10 examples/s]Map (num_proc=12):  83%|████████▎ | 50365/60485 [00:13<00:02, 4437.31 examples/s]Map (num_proc=12):  85%|████████▍ | 51365/60485 [00:13<00:01, 5590.67 examples/s]Map (num_proc=12):  82%|████████▏ | 49325/60485 [00:13<00:02, 3816.74 examples/s]Map (num_proc=12):  82%|████████▏ | 49325/60485 [00:13<00:02, 3855.68 examples/s]Map (num_proc=12):  87%|████████▋ | 52365/60485 [00:14<00:01, 5040.66 examples/s]Map (num_proc=12):  85%|████████▍ | 51365/60485 [00:14<00:01, 4909.12 examples/s]Map (num_proc=12):  85%|████████▍ | 51365/60485 [00:14<00:01, 5423.87 examples/s]Map (num_proc=12):  87%|████████▋ | 52365/60485 [00:14<00:01, 4307.02 examples/s]Map (num_proc=12):  87%|████████▋ | 52365/60485 [00:14<00:01, 4590.57 examples/s]Map (num_proc=12):  88%|████████▊ | 53365/60485 [00:14<00:01, 4423.87 examples/s]Map (num_proc=12):  87%|████████▋ | 52365/60485 [00:14<00:01, 4832.40 examples/s]Map (num_proc=12):  88%|████████▊ | 53365/60485 [00:14<00:01, 4388.61 examples/s]Map (num_proc=12):  90%|████████▉ | 54365/60485 [00:14<00:01, 4251.78 examples/s]Map (num_proc=12):  88%|████████▊ | 53365/60485 [00:14<00:01, 3956.66 examples/s]Map (num_proc=12):  88%|████████▊ | 53365/60485 [00:14<00:01, 4193.94 examples/s]Map (num_proc=12):  90%|████████▉ | 54365/60485 [00:14<00:01, 4108.68 examples/s]Map (num_proc=12):  92%|█████████▏| 55365/60485 [00:14<00:01, 4893.25 examples/s]Map (num_proc=12):  90%|████████▉ | 54365/60485 [00:14<00:01, 4536.80 examples/s]Map (num_proc=12):  90%|████████▉ | 54365/60485 [00:14<00:01, 4455.31 examples/s]Map (num_proc=12):  93%|█████████▎| 56405/60485 [00:14<00:00, 4668.16 examples/s]Map (num_proc=12):  93%|█████████▎| 56405/60485 [00:15<00:00, 4699.66 examples/s]Map (num_proc=12):  95%|█████████▍| 57405/60485 [00:15<00:00, 4081.44 examples/s]Map (num_proc=12):  93%|█████████▎| 56405/60485 [00:15<00:00, 4269.23 examples/s]Map (num_proc=12):  93%|█████████▎| 56405/60485 [00:15<00:00, 4401.58 examples/s]Map (num_proc=12):  95%|█████████▍| 57405/60485 [00:15<00:00, 4122.64 examples/s]Map (num_proc=12):  95%|█████████▍| 57405/60485 [00:15<00:00, 4555.13 examples/s]Map (num_proc=12):  95%|█████████▍| 57405/60485 [00:15<00:00, 4183.62 examples/s]Map (num_proc=12):  97%|█████████▋| 58405/60485 [00:15<00:00, 3039.39 examples/s]Map (num_proc=12):  97%|█████████▋| 58405/60485 [00:15<00:00, 3184.92 examples/s]Map (num_proc=12):  97%|█████████▋| 58405/60485 [00:16<00:00, 3240.59 examples/s]Map (num_proc=12):  97%|█████████▋| 58405/60485 [00:16<00:00, 3008.29 examples/s]Map (num_proc=12):  98%|█████████▊| 59445/60485 [00:16<00:00, 3882.67 examples/s]Map (num_proc=12): 100%|█████████▉| 60445/60485 [00:16<00:00, 2591.64 examples/s]Map (num_proc=12): 100%|█████████▉| 60445/60485 [00:16<00:00, 2674.88 examples/s]Map (num_proc=12): 100%|██████████| 60485/60485 [00:16<00:00, 3563.18 examples/s]
+Dataset map successfully.
+Loading model...
+Map (num_proc=12): 100%|█████████▉| 60445/60485 [00:17<00:00, 2528.29 examples/s]Map (num_proc=12): 100%|█████████▉| 60445/60485 [00:17<00:00, 2674.96 examples/s]Map (num_proc=12): 100%|██████████| 60485/60485 [00:17<00:00, 3531.31 examples/s]
+Dataset map successfully.
+Loading model...
+Map (num_proc=12): 100%|██████████| 60485/60485 [00:17<00:00, 3505.72 examples/s]
+Dataset map successfully.
+Loading model...
+Map (num_proc=12): 100%|██████████| 60485/60485 [00:17<00:00, 3488.71 examples/s]
+Dataset map successfully.
+Loading model...
+Model loaded successfully.
+[2026-04-16 22:51:28,920] [INFO] [config.py:734:__init__] Config mesh_device None world_size = 4
+Model loaded successfully.
+Model loaded successfully.
+Model loaded successfully.
+[2026-04-16 22:51:28,933] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed info: version=0.16.4, git-hash=unknown, git-branch=unknown
+[2026-04-16 22:51:28,933] [INFO] [config.py:734:__init__] Config mesh_device None world_size = 4
+[2026-04-16 22:51:28,933] [INFO] [config.py:734:__init__] Config mesh_device None world_size = 4
+[2026-04-16 22:51:28,933] [INFO] [config.py:734:__init__] Config mesh_device None world_size = 4
+[2026-04-16 22:51:29,218] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Flops Profiler Enabled: False
+Using /home/xiekunpeng/.cache/torch_extensions/py310_cu124 as PyTorch extensions root...
+Using /home/xiekunpeng/.cache/torch_extensions/py310_cu124 as PyTorch extensions root...
+Using /home/xiekunpeng/.cache/torch_extensions/py310_cu124 as PyTorch extensions root...
+Using /home/xiekunpeng/.cache/torch_extensions/py310_cu124 as PyTorch extensions root...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/xiekunpeng/.cache/torch_extensions/py310_cu124/fused_adam/build.ninja...
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/utils/cpp_extension.py:2059: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. 
+If this is not desired, please set os.environ['TORCH_CUDA_ARCH_LIST'].
+  warnings.warn(
+Building extension module fused_adam...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module fused_adam...
+Time to load fused_adam op: 0.485353946685791 seconds
+[2026-04-16 22:51:29,709] [INFO] [logging.py:128:log_dist] [Rank 0] Using DeepSpeed Optimizer param name adamw as basic optimizer
+[2026-04-16 22:51:29,710] [INFO] [logging.py:128:log_dist] [Rank 0] Removing param_group that has no 'params' in the basic Optimizer
+[2026-04-16 22:51:29,718] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Basic Optimizer = FusedAdam
+[2026-04-16 22:51:29,718] [INFO] [logging.py:128:log_dist] [Rank 0] Creating fp16 optimizer with dynamic loss scale
+Loading extension module fused_adam...
+Loading extension module fused_adam...
+Loading extension module fused_adam...
+Time to load fused_adam op: 0.5387823581695557 seconds
+Time to load fused_adam op: 0.5386111736297607 seconds
+Time to load fused_adam op: 0.5423383712768555 seconds
+[2026-04-16 22:51:29,781] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed Final Optimizer = FP16_Optimizer
+[2026-04-16 22:51:29,782] [WARNING] [lr_schedules.py:683:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-04-16 22:51:29,782] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed using configured LR scheduler = WarmupDecayLR
+[2026-04-16 22:51:29,782] [INFO] [logging.py:128:log_dist] [Rank 0] DeepSpeed LR Scheduler = <deepspeed.runtime.lr_schedules.WarmupDecayLR object at 0x7ff114126050>
+[2026-04-16 22:51:29,783] [INFO] [logging.py:128:log_dist] [Rank 0] step=0, skipped=0, lr=[0], mom=[(0.9, 0.999)]
+[2026-04-16 22:51:29,784] [INFO] [config.py:1001:print] DeepSpeedEngine configuration:
+[2026-04-16 22:51:29,785] [INFO] [config.py:1005:print]   activation_checkpointing_config  {
+    "partition_activations": false, 
+    "contiguous_memory_optimization": false, 
+    "cpu_checkpointing": false, 
+    "number_checkpoints": null, 
+    "synchronize_checkpoint_boundary": false, 
+    "profile": false
+}
+[2026-04-16 22:51:29,785] [INFO] [config.py:1005:print]   aio_config ................... {'block_size': 1048576, 'queue_depth': 8, 'intra_op_parallelism': 1, 'single_submit': False, 'overlap_events': True, 'use_gds': False}
+[2026-04-16 22:51:29,785] [INFO] [config.py:1005:print]   amp_enabled .................. False
+[2026-04-16 22:51:29,786] [INFO] [config.py:1005:print]   amp_params ................... False
+[2026-04-16 22:51:29,786] [INFO] [config.py:1005:print]   autotuning_config ............ {
+    "enabled": false, 
+    "start_step": null, 
+    "end_step": null, 
+    "metric_path": null, 
+    "arg_mappings": null, 
+    "metric": "throughput", 
+    "model_info": null, 
+    "results_dir": "autotuning_results", 
+    "exps_dir": "autotuning_exps", 
+    "overwrite": true, 
+    "fast": true, 
+    "start_profile_step": 3, 
+    "end_profile_step": 5, 
+    "tuner_type": "gridsearch", 
+    "tuner_early_stopping": 5, 
+    "tuner_num_trials": 50, 
+    "model_info_path": null, 
+    "mp_size": 1, 
+    "max_train_batch_size": null, 
+    "min_train_batch_size": 1, 
+    "max_train_micro_batch_size_per_gpu": 1.024000e+03, 
+    "min_train_micro_batch_size_per_gpu": 1, 
+    "num_tuning_micro_batch_sizes": 3
+}
+[2026-04-16 22:51:29,786] [INFO] [config.py:1005:print]   bfloat16_enabled ............. False
+[2026-04-16 22:51:29,786] [INFO] [config.py:1005:print]   bfloat16_immediate_grad_update  False
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   checkpoint_parallel_write_pipeline  False
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   checkpoint_tag_validation_enabled  True
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   checkpoint_tag_validation_fail  False
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   comms_config ................. <deepspeed.comm.config.DeepSpeedCommsConfig object at 0x7ff114124940>
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   communication_data_type ...... None
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   compression_config ........... {'weight_quantization': {'shared_parameters': {'enabled': False, 'quantizer_kernel': False, 'schedule_offset': 0, 'quantize_groups': 1, 'quantize_verbose': False, 'quantization_type': 'symmetric', 'quantize_weight_in_forward': False, 'rounding': 'nearest', 'fp16_mixed_quantize': False, 'quantize_change_ratio': 0.001}, 'different_groups': {}}, 'activation_quantization': {'shared_parameters': {'enabled': False, 'quantization_type': 'symmetric', 'range_calibration': 'dynamic', 'schedule_offset': 1000}, 'different_groups': {}}, 'sparse_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'row_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'head_pruning': {'shared_parameters': {'enabled': False, 'method': 'topk', 'schedule_offset': 1000}, 'different_groups': {}}, 'channel_pruning': {'shared_parameters': {'enabled': False, 'method': 'l1', 'schedule_offset': 1000}, 'different_groups': {}}, 'layer_reduction': {'enabled': False}}
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   curriculum_enabled_legacy .... False
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   curriculum_params_legacy ..... False
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   data_efficiency_config ....... {'enabled': False, 'seed': 1234, 'data_sampling': {'enabled': False, 'num_epochs': 1000, 'num_workers': 0, 'curriculum_learning': {'enabled': False}}, 'data_routing': {'enabled': False, 'random_ltd': {'enabled': False, 'layer_token_lr_schedule': {'enabled': False}}}}
+[2026-04-16 22:51:29,787] [INFO] [config.py:1005:print]   data_efficiency_enabled ...... False
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   dataloader_drop_last ......... False
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   disable_allgather ............ False
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   dump_state ................... False
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   dynamic_loss_scale_args ...... {'init_scale': 65536, 'scale_window': 1000, 'delayed_shift': 2, 'consecutive_hysteresis': False, 'min_scale': 1}
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_enabled ........... False
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_gas_boundary_resolution  1
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_layer_name ........ bert.encoder.layer
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_layer_num ......... 0
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_max_iter .......... 100
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_stability ......... 1e-06
+[2026-04-16 22:51:29,788] [INFO] [config.py:1005:print]   eigenvalue_tol ............... 0.01
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   eigenvalue_verbose ........... False
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   elasticity_enabled ........... False
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   flops_profiler_config ........ {
+    "enabled": false, 
+    "recompute_fwd_factor": 0.0, 
+    "profile_step": 1, 
+    "module_depth": -1, 
+    "top_modules": 1, 
+    "detailed": true, 
+    "output_file": null
+}
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   fp16_auto_cast ............... False
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   fp16_enabled ................. True
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   fp16_master_weights_and_gradients  False
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   global_rank .................. 0
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   grad_accum_dtype ............. None
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   gradient_accumulation_steps .. 1
+[2026-04-16 22:51:29,789] [INFO] [config.py:1005:print]   gradient_clipping ............ 0.0
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   gradient_predivide_factor .... 1.0
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   graph_harvesting ............. False
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   hybrid_engine ................ enabled=False max_out_tokens=512 inference_tp_size=1 release_inference_cache=False pin_parameters=True tp_gather_partition_size=8
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   initial_dynamic_scale ........ 65536
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   load_universal_checkpoint .... False
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   loss_scale ................... 0
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   memory_breakdown ............. False
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   mics_hierarchial_params_gather  False
+[2026-04-16 22:51:29,790] [INFO] [config.py:1005:print]   mics_shard_size .............. -1
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   monitor_config ............... tensorboard=TensorBoardConfig(enabled=False, output_path='', job_name='DeepSpeedJobName') comet=CometConfig(enabled=False, samples_log_interval=100, project=None, workspace=None, api_key=None, experiment_name=None, experiment_key=None, online=None, mode=None) wandb=WandbConfig(enabled=False, group=None, team=None, project='deepspeed') csv_monitor=CSVConfig(enabled=False, output_path='', job_name='DeepSpeedJobName')
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   nebula_config ................ {
+    "enabled": false, 
+    "persistent_storage_path": null, 
+    "persistent_time_interval": 100, 
+    "num_of_version_in_retention": 2, 
+    "enable_nebula_load": true, 
+    "load_path": null
+}
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   optimizer_legacy_fusion ...... False
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   optimizer_name ............... adamw
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   optimizer_params ............. {'lr': 0.0005, 'weight_decay': 0.01}
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   pipeline ..................... {'stages': 'auto', 'partition': 'best', 'seed_layers': False, 'activation_checkpoint_interval': 0, 'pipe_partitioned': True, 'grad_partitioned': True}
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   pld_enabled .................. False
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   pld_params ................... False
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   prescale_gradients ........... False
+[2026-04-16 22:51:29,791] [INFO] [config.py:1005:print]   scheduler_name ............... WarmupDecayLR
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   scheduler_params ............. {'total_num_steps': 3781, 'warmup_min_lr': 0, 'warmup_max_lr': 0.0005, 'warmup_num_steps': 100}
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   seq_parallel_communication_data_type  torch.float32
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   sparse_attention ............. None
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   sparse_gradients_enabled ..... False
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   steps_per_print .............. None
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   tensor_parallel_config ....... dtype=torch.float16 autotp_size=0 tensor_parallel=TPConfig(tp_size=1, tp_grain_size=1, mpu=None, tp_group=None) injection_policy_tuple=None keep_module_on_host=False replace_with_kernel_inject=False
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   timers_config ................ enabled=True synchronized=True
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   train_batch_size ............. 16
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   train_micro_batch_size_per_gpu  4
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   use_data_before_expert_parallel_  False
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   use_node_local_storage ....... False
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   wall_clock_breakdown ......... False
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   weight_quantization_config ... None
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   world_size ................... 4
+[2026-04-16 22:51:29,792] [INFO] [config.py:1005:print]   zero_allow_untested_optimizer  False
+[2026-04-16 22:51:29,793] [INFO] [config.py:1005:print]   zero_config .................. stage=0 contiguous_gradients=True reduce_scatter=True reduce_bucket_size=500000000 use_multi_rank_bucket_allreduce=True allgather_partitions=True allgather_bucket_size=500000000 overlap_comm=False load_from_fp32_weights=True elastic_checkpoint=False offload_param=None offload_optimizer=None sub_group_size=1000000000 cpu_offload_param=None cpu_offload_use_pin_memory=None cpu_offload=None prefetch_bucket_size=50000000 param_persistence_threshold=100000 model_persistence_threshold=9223372036854775807 max_live_parameters=1000000000 max_reuse_distance=1000000000 gather_16bit_weights_on_model_save=False module_granularity_threshold=0 use_all_reduce_for_fetch_params=False stage3_gather_fp16_weights_on_model_save=False ignore_unused_parameters=True legacy_stage1=False round_robin_gradients=False zero_hpz_partition_size=1 zero_quantized_weights=False zero_quantized_nontrainable_weights=False zero_quantized_gradients=False zeropp_loco_param=None mics_shard_size=-1 mics_hierarchical_params_gather=False memory_efficient_linear=True pipeline_loading_checkpoint=False override_module_apply=True log_trace_cache_warnings=False
+[2026-04-16 22:51:29,793] [INFO] [config.py:1005:print]   zero_enabled ................. False
+[2026-04-16 22:51:29,793] [INFO] [config.py:1005:print]   zero_force_ds_cpu_optimizer .. True
+[2026-04-16 22:51:29,793] [INFO] [config.py:1005:print]   zero_optimization_stage ...... 0
+[2026-04-16 22:51:29,793] [INFO] [config.py:991:print_user_config]   json = {
+    "train_batch_size": 16, 
+    "train_micro_batch_size_per_gpu": 4, 
+    "gradient_accumulation_steps": 1, 
+    "optimizer": {
+        "type": "AdamW", 
+        "params": {
+            "lr": 0.0005, 
+            "weight_decay": 0.01
+        }
+    }, 
+    "fp16": {
+        "enabled": true, 
+        "loss_scale": 0, 
+        "initial_scale_power": 16, 
+        "loss_scale_window": 1000, 
+        "hysteresis": 2, 
+        "min_loss_scale": 1
+    }, 
+    "scheduler": {
+        "type": "WarmupDecayLR", 
+        "params": {
+            "total_num_steps": 3.781000e+03, 
+            "warmup_min_lr": 0, 
+            "warmup_max_lr": 0.0005, 
+            "warmup_num_steps": 100
+        }
+    }
+}
+[2026-04-16 22:51:29,794] [WARNING] [lr_schedules.py:683:get_lr] Attempting to get learning rate from scheduler before it has started
+[2026-04-16 22:51:29,794] [WARNING] [lr_schedules.py:683:get_lr] Attempting to get learning rate from scheduler before it has started
+[DiffCkpt] Auto-calculated max_checkpoint_count=120 (max_full_interval=100 + 20)
+Using 20 threads for gradient decompression.
+[DiffCkpt] Auto-calculated max_checkpoint_count=120 (max_full_interval=100 + 20)
+[DiffCkpt] Auto-calculated max_checkpoint_count=120 (max_full_interval=100 + 20)
+Using 20 threads for gradient decompression.
+Using 20 threads for gradient decompression.
+[2026-04-16 22:51:29,798] [WARNING] [lr_schedules.py:683:get_lr] Attempting to get learning rate from scheduler before it has started
+save process start!
+[DiffCkpt] Auto-calculated max_checkpoint_count=120 (max_full_interval=100 + 20)
+
+============================================================
+[AnomalyDetector] Initialized (block mechanism)
+============================================================
+  m_threshold           = 113.137085
+  v_threshold           = 12800.000000
+  layernorm_threshold   = 10.00
+  max_block_steps       = 2
+  safety_factor         = 1.0
+============================================================
+
+Using 20 threads for gradient decompression.
+
+============================================================
+[SDCInjector] Initialized
+  inject_prob:     0.02
+  magnitude:       100.0x grad_std
+  param_fraction:  0.1
+  min_batch:       20
+============================================================
+
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:51:32,152] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:32,209] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:32,234] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:32,267] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:32,281] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[DiffCkpt] Background saver started
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:51:39,025] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:39,094] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:39,103] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:39,188] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:51:45,578] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:45,622] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:45,798] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:45,813] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[2026-04-16 22:51:52,103] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:52,370] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:53,074] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2026-04-16 22:51:53,170] [INFO] [real_accelerator.py:222:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+/mnt/newdisk/xiekunpeng/LowDiff/miniconda/envs/LowDiff/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...
+`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...
+`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+[rank0]:[W416 22:51:58.050653459 CudaIPCTypes.cpp:96] Producer process tried to deallocate over 1000 memory blocks referred by consumer processes. Deallocation might be significantly slowed down. We assume it will never going to be the case, but if it is, please file but to https://github.com/pytorch/pytorch
+[2026-04-16 22:51:58,995] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 0
+[2026-04-16 22:51:58,995] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 65536 to 32768.0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 65536 to 32768.0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 65536 to 32768.0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 0
+[2026-04-16 22:51:58,996] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 65536, reducing to 32768.0
+[2026-04-16 22:51:58,996] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 65536 to 32768.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #1 at iter 0
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 1 checkpoints: gpt2_wikitext-2_topk_0.01_0-0_batch20.pth.tar (0.285s)
+[AnomalyDetector] Emergency full checkpoint saved (3.433s)
+[Epoch 0/1] Batch 0, Loss: 4.129, Time: 4.986
+[SmartCkpt] Saved full checkpoint at batch 0 (reason: periodic, time: 3.737s)
+[AnomalyDetector] BLOCKED step at batch 1: blocking_update (remaining=1)
+[Epoch 0/1] Batch 1, Loss: 4.150, Time: 0.376
+[AnomalyDetector] BLOCKED step at batch 2: blocking_update (remaining=0)
+[Epoch 0/1] Batch 2, Loss: 4.374, Time: 0.373
+[2026-04-16 22:52:07,270] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 3
+[2026-04-16 22:52:07,270] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 32768.0 to 16384.0
+[2026-04-16 22:52:07,272] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 3
+[2026-04-16 22:52:07,272] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 3
+[2026-04-16 22:52:07,272] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 32768.0 to 16384.0
+[2026-04-16 22:52:07,272] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 32768.0 to 16384.0
+[2026-04-16 22:52:07,338] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 3
+[2026-04-16 22:52:07,338] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 32768.0 to 16384.0
+[2026-04-16 22:52:07,339] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 32768.0, reducing to 16384.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #2 at iter 3
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-1_batch20.pth.tar (0.231s)
+[AnomalyDetector] Emergency full checkpoint saved (3.297s)
+[Epoch 0/1] Batch 3, Loss: 4.886, Time: 3.660
+[AnomalyDetector] BLOCKED step at batch 4: blocking_update (remaining=1)
+[Epoch 0/1] Batch 4, Loss: 4.168, Time: 0.373
+[AnomalyDetector] BLOCKED step at batch 5: blocking_update (remaining=0)
+[Epoch 0/1] Batch 5, Loss: 3.276, Time: 0.372
+[2026-04-16 22:52:11,674] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 6
+[2026-04-16 22:52:11,674] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 16384.0 to 8192.0
+[2026-04-16 22:52:11,674] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 6
+[2026-04-16 22:52:11,674] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 16384.0 to 8192.0
+[2026-04-16 22:52:11,674] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 6
+[2026-04-16 22:52:11,675] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 16384.0 to 8192.0
+[2026-04-16 22:52:11,751] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 6
+[2026-04-16 22:52:11,752] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 16384.0 to 8192.0
+[2026-04-16 22:52:11,752] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 16384.0, reducing to 8192.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #3 at iter 6
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-4_batch20.pth.tar (0.258s)
+[AnomalyDetector] Emergency full checkpoint saved (3.520s)
+[Epoch 0/1] Batch 6, Loss: 4.071, Time: 3.889
+[AnomalyDetector] BLOCKED step at batch 7: blocking_update (remaining=1)
+[Epoch 0/1] Batch 7, Loss: 6.674, Time: 0.367
+[AnomalyDetector] BLOCKED step at batch 8: blocking_update (remaining=0)
+[Epoch 0/1] Batch 8, Loss: nan, Time: 0.404
+[2026-04-16 22:52:16,355] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 9
+[2026-04-16 22:52:16,356] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 8192.0 to 4096.0
+[2026-04-16 22:52:16,356] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 9
+[2026-04-16 22:52:16,356] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 8192.0 to 4096.0
+[2026-04-16 22:52:16,356] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 9
+[2026-04-16 22:52:16,356] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 8192.0 to 4096.0
+[2026-04-16 22:52:16,450] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 9
+[2026-04-16 22:52:16,450] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 8192.0 to 4096.0
+[2026-04-16 22:52:16,450] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 8192.0, reducing to 4096.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #4 at iter 9
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-7_batch20.pth.tar (0.471s)
+[AnomalyDetector] Emergency full checkpoint saved (3.597s)
+[Epoch 0/1] Batch 9, Loss: 6.799, Time: 3.997
+[AnomalyDetector] BLOCKED step at batch 10: blocking_update (remaining=1)
+[Epoch 0/1] Batch 10, Loss: 3.996, Time: 0.417
+[AnomalyDetector] BLOCKED step at batch 11: blocking_update (remaining=0)
+[Epoch 0/1] Batch 11, Loss: 4.361, Time: 0.402
+[2026-04-16 22:52:21,184] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 12
+[2026-04-16 22:52:21,184] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 12
+[2026-04-16 22:52:21,184] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 4096.0 to 2048.0
+[2026-04-16 22:52:21,184] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 4096.0 to 2048.0
+[2026-04-16 22:52:21,185] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 12
+[2026-04-16 22:52:21,186] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 4096.0 to 2048.0
+[2026-04-16 22:52:21,262] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 12
+[2026-04-16 22:52:21,262] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 4096.0 to 2048.0
+[2026-04-16 22:52:21,262] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 4096.0, reducing to 2048.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #5 at iter 12
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-10_batch20.pth.tar (0.245s)
+[AnomalyDetector] Emergency full checkpoint saved (3.588s)
+[Epoch 0/1] Batch 12, Loss: 4.567, Time: 3.973
+[AnomalyDetector] BLOCKED step at batch 13: blocking_update (remaining=1)
+[Epoch 0/1] Batch 13, Loss: 7.631, Time: 0.359
+[AnomalyDetector] BLOCKED step at batch 14: blocking_update (remaining=0)
+[Epoch 0/1] Batch 14, Loss: 3.767, Time: 0.360
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #6 at iter 15
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-13_batch20.pth.tar (0.268s)
+[AnomalyDetector] Emergency full checkpoint saved (4.995s)
+[Epoch 0/1] Batch 15, Loss: 4.261, Time: 5.375
+[AnomalyDetector] BLOCKED step at batch 16: blocking_update (remaining=1)
+[Epoch 0/1] Batch 16, Loss: 7.246, Time: 0.363
+[AnomalyDetector] BLOCKED step at batch 17: blocking_update (remaining=0)
+[Epoch 0/1] Batch 17, Loss: 6.459, Time: 0.383
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #7 at iter 18
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-16_batch20.pth.tar (0.262s)
+[AnomalyDetector] Emergency full checkpoint saved (3.556s)
+[Epoch 0/1] Batch 18, Loss: 3.697, Time: 3.945
+[AnomalyDetector] BLOCKED step at batch 19: blocking_update (remaining=1)
+[Epoch 0/1] Batch 19, Loss: 3.900, Time: 0.372
+[AnomalyDetector] BLOCKED step at batch 20: blocking_update (remaining=0)
+[Epoch 0/1] Batch 20, Loss: 4.114, Time: 0.389
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #8 at iter 21
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-19_batch20.pth.tar (0.240s)
+[AnomalyDetector] Emergency full checkpoint saved (4.087s)
+[Epoch 0/1] Batch 21, Loss: 3.818, Time: 4.496
+[AnomalyDetector] BLOCKED step at batch 22: blocking_update (remaining=1)
+[Epoch 0/1] Batch 22, Loss: 3.476, Time: 0.401
+[AnomalyDetector] BLOCKED step at batch 23: blocking_update (remaining=0)
+[Epoch 0/1] Batch 23, Loss: 4.015, Time: 0.390
+[2026-04-16 22:52:42,030] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 24
+[2026-04-16 22:52:42,030] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 24
+[2026-04-16 22:52:42,031] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 2048.0 to 1024.0
+[2026-04-16 22:52:42,031] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 2048.0 to 1024.0
+[2026-04-16 22:52:42,031] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 24
+[2026-04-16 22:52:42,031] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 2048.0 to 1024.0
+[2026-04-16 22:52:42,448] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 24
+[2026-04-16 22:52:42,448] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 2048.0 to 1024.0
+[2026-04-16 22:52:42,448] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 2048.0, reducing to 1024.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #9 at iter 24
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-22_batch20.pth.tar (0.277s)
+[AnomalyDetector] Emergency full checkpoint saved (3.598s)
+[Epoch 0/1] Batch 24, Loss: 4.328, Time: 4.335
+[AnomalyDetector] BLOCKED step at batch 25: blocking_update (remaining=1)
+[Epoch 0/1] Batch 25, Loss: 3.977, Time: 0.400
+[AnomalyDetector] BLOCKED step at batch 26: blocking_update (remaining=0)
+[Epoch 0/1] Batch 26, Loss: nan, Time: 0.392
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #10 at iter 27
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-25_batch20.pth.tar (0.525s)
+[AnomalyDetector] Emergency full checkpoint saved (3.485s)
+[Epoch 0/1] Batch 27, Loss: 4.231, Time: 3.926
+[AnomalyDetector] BLOCKED step at batch 28: blocking_update (remaining=1)
+[Epoch 0/1] Batch 28, Loss: 3.745, Time: 0.391
+[AnomalyDetector] BLOCKED step at batch 29: blocking_update (remaining=0)
+[Epoch 0/1] Batch 29, Loss: 3.968, Time: 0.392
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #11 at iter 30
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-28_batch20.pth.tar (0.265s)
+[AnomalyDetector] Emergency full checkpoint saved (4.304s)
+[Epoch 0/1] Batch 30, Loss: 3.565, Time: 4.728
+[AnomalyDetector] BLOCKED step at batch 31: blocking_update (remaining=1)
+[Epoch 0/1] Batch 31, Loss: 3.639, Time: 0.393
+[AnomalyDetector] BLOCKED step at batch 32: blocking_update (remaining=0)
+[Epoch 0/1] Batch 32, Loss: 4.021, Time: 0.401
+
+[SDCInjector] INJECTED at epoch 0 batch 33
+  Affected params: 14/148
+  Magnitude: 100.0x grad_std
+  Injection #1
+    - transformer.h.10.mlp.c_fc.weight
+    - transformer.h.1.ln_2.bias
+    - transformer.h.0.ln_2.weight
+    ... and 11 more
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #12 at iter 33
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-31_batch20.pth.tar (0.270s)
+[AnomalyDetector] Emergency full checkpoint saved (3.492s)
+[Epoch 0/1] Batch 33, Loss: 3.661, Time: 5.343
+[AnomalyDetector] BLOCKED step at batch 34: blocking_update (remaining=1)
+[Epoch 0/1] Batch 34, Loss: 4.301, Time: 0.411
+[AnomalyDetector] BLOCKED step at batch 35: blocking_update (remaining=0)
+[Epoch 0/1] Batch 35, Loss: 4.288, Time: 0.399
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #13 at iter 36
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-34_batch20.pth.tar (0.264s)
+[AnomalyDetector] Emergency full checkpoint saved (3.490s)
+[Epoch 0/1] Batch 36, Loss: 3.836, Time: 3.872
+[AnomalyDetector] BLOCKED step at batch 37: blocking_update (remaining=1)
+[Epoch 0/1] Batch 37, Loss: nan, Time: 0.363
+[AnomalyDetector] BLOCKED step at batch 38: blocking_update (remaining=0)
+[Epoch 0/1] Batch 38, Loss: nan, Time: 0.384
+[2026-04-16 22:53:08,175] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 39
+[2026-04-16 22:53:08,175] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 39
+[2026-04-16 22:53:08,176] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 1024.0 to 512.0
+[2026-04-16 22:53:08,176] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 1024.0 to 512.0
+[2026-04-16 22:53:08,176] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 39
+[2026-04-16 22:53:08,176] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 1024.0 to 512.0
+
+[SDCInjector] INJECTED at epoch 0 batch 39
+  Affected params: 14/148
+  Magnitude: 100.0x grad_std
+  Injection #2
+    - transformer.h.9.mlp.c_fc.bias
+    - transformer.h.9.ln_2.weight
+    - transformer.h.6.mlp.c_fc.weight
+    ... and 11 more
+[2026-04-16 22:53:08,257] [INFO] [fused_optimizer.py:392:_update_scale] 
+Grad overflow on iteration 39
+[2026-04-16 22:53:08,257] [INFO] [fused_optimizer.py:393:_update_scale] Reducing dynamic loss scale from 1024.0 to 512.0
+[2026-04-16 22:53:08,257] [INFO] [logging.py:128:log_dist] [Rank 0] Overflow detected. Skipping step. Attempted loss scale: 1024.0, reducing to 512.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #14 at iter 39
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-37_batch20.pth.tar (0.274s)
+[AnomalyDetector] Emergency full checkpoint saved (5.103s)
+[Epoch 0/1] Batch 39, Loss: 6.058, Time: 5.480
+[AnomalyDetector] BLOCKED step at batch 40: blocking_update (remaining=1)
+[Epoch 0/1] Batch 40, Loss: 3.926, Time: 0.390
+[AnomalyDetector] BLOCKED step at batch 41: blocking_update (remaining=0)
+[Epoch 0/1] Batch 41, Loss: 4.030, Time: 0.409
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #15 at iter 42
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-40_batch20.pth.tar (1.353s)
+[AnomalyDetector] Emergency full checkpoint saved (4.665s)
+[Epoch 0/1] Batch 42, Loss: 4.151, Time: 5.058
+[AnomalyDetector] BLOCKED step at batch 43: blocking_update (remaining=1)
+[Epoch 0/1] Batch 43, Loss: 4.000, Time: 0.360
+[AnomalyDetector] BLOCKED step at batch 44: blocking_update (remaining=0)
+[Epoch 0/1] Batch 44, Loss: 3.585, Time: 0.375
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #16 at iter 45
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-43_batch20.pth.tar (0.267s)
+[AnomalyDetector] Emergency full checkpoint saved (3.531s)
+[Epoch 0/1] Batch 45, Loss: nan, Time: 3.947
+[AnomalyDetector] BLOCKED step at batch 46: blocking_update (remaining=1)
+[Epoch 0/1] Batch 46, Loss: 3.838, Time: 0.393
+[AnomalyDetector] BLOCKED step at batch 47: blocking_update (remaining=0)
+[Epoch 0/1] Batch 47, Loss: 5.100, Time: 0.410
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #17 at iter 48
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-46_batch20.pth.tar (0.276s)
+[AnomalyDetector] Emergency full checkpoint saved (3.871s)
+[Epoch 0/1] Batch 48, Loss: 3.916, Time: 4.259
+[AnomalyDetector] BLOCKED step at batch 49: blocking_update (remaining=1)
+[Epoch 0/1] Batch 49, Loss: 4.170, Time: 0.652
+[AnomalyDetector] BLOCKED step at batch 50: blocking_update (remaining=0)
+[Epoch 0/1] Batch 50, Loss: 4.806, Time: 0.371
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #18 at iter 51
+  Reason: max_ln=17.4219 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-49_batch20.pth.tar (0.276s)
+[AnomalyDetector] Emergency full checkpoint saved (6.446s)
+[Epoch 0/1] Batch 51, Loss: 4.721, Time: 6.855
+[AnomalyDetector] BLOCKED step at batch 52: blocking_update (remaining=1)
+[Epoch 0/1] Batch 52, Loss: 3.996, Time: 0.360
+[AnomalyDetector] BLOCKED step at batch 53: blocking_update (remaining=0)
+[Epoch 0/1] Batch 53, Loss: 3.364, Time: 0.388
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #19 at iter 54
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-52_batch20.pth.tar (0.385s)
+[AnomalyDetector] Emergency full checkpoint saved (44.489s)
+[Epoch 0/1] Batch 54, Loss: 3.387, Time: 44.886
+[AnomalyDetector] BLOCKED step at batch 55: blocking_update (remaining=1)
+[Epoch 0/1] Batch 55, Loss: 4.058, Time: 0.377
+[AnomalyDetector] BLOCKED step at batch 56: blocking_update (remaining=0)
+[Epoch 0/1] Batch 56, Loss: nan, Time: 0.409
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #20 at iter 57
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-55_batch20.pth.tar (1.335s)
+[AnomalyDetector] Emergency full checkpoint saved (22.390s)
+[Epoch 0/1] Batch 57, Loss: 3.819, Time: 22.772
+[AnomalyDetector] BLOCKED step at batch 58: blocking_update (remaining=1)
+[Epoch 0/1] Batch 58, Loss: 4.049, Time: 0.379
+[AnomalyDetector] BLOCKED step at batch 59: blocking_update (remaining=0)
+[Epoch 0/1] Batch 59, Loss: 4.470, Time: 0.368
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #21 at iter 60
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-58_batch20.pth.tar (0.763s)
+[AnomalyDetector] Emergency full checkpoint saved (20.073s)
+[Epoch 0/1] Batch 60, Loss: 4.094, Time: 20.452
+[AnomalyDetector] BLOCKED step at batch 61: blocking_update (remaining=1)
+[Epoch 0/1] Batch 61, Loss: 3.762, Time: 0.385
+[AnomalyDetector] BLOCKED step at batch 62: blocking_update (remaining=0)
+[Epoch 0/1] Batch 62, Loss: 3.557, Time: 0.402
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #22 at iter 63
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-61_batch20.pth.tar (0.764s)
+[AnomalyDetector] Emergency full checkpoint saved (18.625s)
+[Epoch 0/1] Batch 63, Loss: 4.034, Time: 19.034
+
+[SDCInjector] INJECTED at epoch 0 batch 64
+  Affected params: 14/148
+  Magnitude: 100.0x grad_std
+  Injection #3
+    - transformer.h.10.mlp.c_proj.weight
+    - transformer.h.5.mlp.c_fc.weight
+    - transformer.h.0.ln_2.bias
+    ... and 11 more
+[AnomalyDetector] BLOCKED step at batch 64: blocking_update (remaining=1)
+[Epoch 0/1] Batch 64, Loss: nan, Time: 0.368
+[AnomalyDetector] BLOCKED step at batch 65: blocking_update (remaining=0)
+[Epoch 0/1] Batch 65, Loss: nan, Time: 0.375
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #23 at iter 66
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-64_batch20.pth.tar (1.035s)
+[AnomalyDetector] Emergency full checkpoint saved (20.195s)
+[Epoch 0/1] Batch 66, Loss: 3.980, Time: 20.570
+[AnomalyDetector] BLOCKED step at batch 67: blocking_update (remaining=1)
+[Epoch 0/1] Batch 67, Loss: 2.810, Time: 0.363
+[AnomalyDetector] BLOCKED step at batch 68: blocking_update (remaining=0)
+[Epoch 0/1] Batch 68, Loss: 3.906, Time: 0.376
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #24 at iter 69
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-67_batch20.pth.tar (1.613s)
+[AnomalyDetector] Emergency full checkpoint saved (19.302s)
+[Epoch 0/1] Batch 69, Loss: 3.950, Time: 19.683
+[AnomalyDetector] BLOCKED step at batch 70: blocking_update (remaining=1)
+[Epoch 0/1] Batch 70, Loss: 7.538, Time: 0.362
+[AnomalyDetector] BLOCKED step at batch 71: blocking_update (remaining=0)
+[Epoch 0/1] Batch 71, Loss: 3.486, Time: 0.381
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #25 at iter 72
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-70_batch20.pth.tar (0.805s)
+[AnomalyDetector] Emergency full checkpoint saved (20.032s)
+[Epoch 0/1] Batch 72, Loss: 3.850, Time: 20.433
+[AnomalyDetector] BLOCKED step at batch 73: blocking_update (remaining=1)
+[Epoch 0/1] Batch 73, Loss: 3.836, Time: 0.607
+[AnomalyDetector] BLOCKED step at batch 74: blocking_update (remaining=0)
+[Epoch 0/1] Batch 74, Loss: 4.902, Time: 0.385
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #26 at iter 75
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-73_batch20.pth.tar (0.866s)
+[AnomalyDetector] Emergency full checkpoint saved (19.980s)
+[Epoch 0/1] Batch 75, Loss: 4.515, Time: 20.393
+[AnomalyDetector] BLOCKED step at batch 76: blocking_update (remaining=1)
+[Epoch 0/1] Batch 76, Loss: 4.911, Time: 0.399
+[AnomalyDetector] BLOCKED step at batch 77: blocking_update (remaining=0)
+[Epoch 0/1] Batch 77, Loss: nan, Time: 0.404
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #27 at iter 78
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-76_batch20.pth.tar (0.804s)
+[AnomalyDetector] Emergency full checkpoint saved (20.847s)
+[Epoch 0/1] Batch 78, Loss: 4.053, Time: 21.251
+[AnomalyDetector] BLOCKED step at batch 79: blocking_update (remaining=1)
+[Epoch 0/1] Batch 79, Loss: 4.447, Time: 0.432
+[AnomalyDetector] BLOCKED step at batch 80: blocking_update (remaining=0)
+[Epoch 0/1] Batch 80, Loss: 4.555, Time: 0.642
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #28 at iter 81
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-79_batch20.pth.tar (0.931s)
+[AnomalyDetector] Emergency full checkpoint saved (23.840s)
+[Epoch 0/1] Batch 81, Loss: 3.778, Time: 24.245
+[AnomalyDetector] BLOCKED step at batch 82: blocking_update (remaining=1)
+[Epoch 0/1] Batch 82, Loss: nan, Time: 0.368
+[AnomalyDetector] BLOCKED step at batch 83: blocking_update (remaining=0)
+[Epoch 0/1] Batch 83, Loss: 4.552, Time: 0.395
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #29 at iter 84
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-82_batch20.pth.tar (1.345s)
+[AnomalyDetector] Emergency full checkpoint saved (21.293s)
+[Epoch 0/1] Batch 84, Loss: 4.804, Time: 21.672
+[AnomalyDetector] BLOCKED step at batch 85: blocking_update (remaining=1)
+[Epoch 0/1] Batch 85, Loss: nan, Time: 0.371
+[AnomalyDetector] BLOCKED step at batch 86: blocking_update (remaining=0)
+[Epoch 0/1] Batch 86, Loss: 4.333, Time: 0.383
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[AnomalyDetector] ANOMALY #30 at iter 87
+  Reason: max_ln=17.4062 > 10.00
+  Will block next 2 step(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Communicator] Flush command sent to diff_ckpt_saver
+[DiffCkpt] Flushed 3 checkpoints: gpt2_wikitext-2_topk_0.01_0-85_batch20.pth.tar (0.838s)

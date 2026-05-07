@@ -1,4 +1,6 @@
-#!/bin/zsh
+ #!/bin/zsh
+
+set -o pipefail
 
 ################################################################################
 # LowDiff Training Launcher (With Compression & Differential Checkpoints)
@@ -33,10 +35,25 @@ NUM_GPUS=4
 ENABLE_SMART_CHECKPOINT=0  # 测试：禁用智能检查点，专注测试延迟写入
 
 # Optimizer Monitoring (Hardware Fault Detection)
-ENABLE_OPTIMIZER_MONITORING=0  # 启用优化器监控（1=启用，0=禁用）
+ENABLE_OPTIMIZER_MONITORING=1  # 启用优化器监控（1=启用，0=禁用）
 MONITORING_SAFETY_FACTOR=1.0   # 安全系数（>1.0更保守，默认1.0）
 INJECT_FAULT=0                 # 注入故障测试（1=启用，0=禁用，仅用于测试）
 INJECT_FAULT_AT_BATCH=50       # 在第N个batch注入故障
+
+# SDC Injection (Silent Data Corruption)
+ENABLE_SDC_INJECTION=1         # 启用SDC故障注入（1=启用，0=禁用）
+SDC_INJECT_PROB=0.02           # 每个batch注入概率（默认2%）
+SDC_PARAM_FRACTION=0.1         # 每次注入影响的参数比例（10%）
+SDC_INJ_TYPE=rbflip            # 注入类型: rbflip
+SDC_POSITIONS_PER_PARAM=1      # 每个参数张量注入位置数
+SDC_MIN_BATCH=20               # 最小batch后才允许注入
+SDC_TARGET_PARAM=              # 仅对包含该子串的参数名注入（为空表示不限制）
+
+# Fault Injection (Poisson-based)
+ENABLE_FAULT_INJECTION=0       # 启用泊松过程故障注入（1=启用，0=禁用）
+FAULT_MTBF=5000                # 平均故障间隔（MTBF，以batch为单位）
+FAULT_MIN_BATCHES=50           # 最小训练步数后才允许崩溃
+
 
 # Create save directory if it doesn't exist
 mkdir -p $SAVE_DIR
@@ -88,7 +105,27 @@ log "Fault Tolerance Configuration:"
 log "  - Optimizer Monitoring: $([ $ENABLE_OPTIMIZER_MONITORING -eq 1 ] && echo 'ENABLED' || echo 'DISABLED')"
 if [ $ENABLE_OPTIMIZER_MONITORING -eq 1 ]; then
     log "  - Safety Factor: $MONITORING_SAFETY_FACTOR"
-    log "  - Fault Injection: $([ $INJECT_FAULT -eq 1 ] && echo 'ENABLED (batch '$INJECT_FAULT_AT_BATCH')' || echo 'DISABLED')"
+    log "  - Legacy Fault Injection: $([ $INJECT_FAULT -eq 1 ] && echo 'ENABLED (batch '$INJECT_FAULT_AT_BATCH')' || echo 'DISABLED')"
+fi
+log ""
+log "SDC Injection Configuration:"
+log "  - SDC Injection: $([ $ENABLE_SDC_INJECTION -eq 1 ] && echo 'ENABLED' || echo 'DISABLED')"
+if [ $ENABLE_SDC_INJECTION -eq 1 ]; then
+    log "  - Injection Probability: $SDC_INJECT_PROB (per batch)"
+    log "  - Injection Type: $SDC_INJ_TYPE"
+    log "  - Param Fraction: $SDC_PARAM_FRACTION"
+    log "  - Positions Per Param: $SDC_POSITIONS_PER_PARAM"
+    log "  - Min Batch: $SDC_MIN_BATCH"
+    if [ -n "$SDC_TARGET_PARAM" ]; then
+        log "  - Target Param Pattern: $SDC_TARGET_PARAM"
+    fi
+fi
+log ""
+log "Poisson-based Fault Injection:"
+log "  - Fault Injection: $([ $ENABLE_FAULT_INJECTION -eq 1 ] && echo 'ENABLED' || echo 'DISABLED')"
+if [ $ENABLE_FAULT_INJECTION -eq 1 ]; then
+    log "  - MTBF (batches): $FAULT_MTBF"
+    log "  - Min batches before crash: $FAULT_MIN_BATCHES"
 fi
 log ""
 log "Starting training at $(date)..."
@@ -141,6 +178,19 @@ fi
 # Add fault injection if enabled (for testing only)
 if [ $INJECT_FAULT -eq 1 ]; then
     CMD_ARGS="$CMD_ARGS --inject-fault --inject-fault-at-batch $INJECT_FAULT_AT_BATCH"
+fi
+
+# Add SDC injection if enabled
+if [ $ENABLE_SDC_INJECTION -eq 1 ]; then
+    CMD_ARGS="$CMD_ARGS --enable-sdc-injection --sdc-inject-prob $SDC_INJECT_PROB --sdc-param-fraction $SDC_PARAM_FRACTION --sdc-inj-type $SDC_INJ_TYPE --sdc-positions-per-param $SDC_POSITIONS_PER_PARAM --sdc-min-batch $SDC_MIN_BATCH"
+    if [ -n "$SDC_TARGET_PARAM" ]; then
+        CMD_ARGS="$CMD_ARGS --sdc-target-param $SDC_TARGET_PARAM"
+    fi
+fi
+
+# Add Poisson-based fault injection if enabled
+if [ $ENABLE_FAULT_INJECTION -eq 1 ]; then
+    CMD_ARGS="$CMD_ARGS --enable-fault-injection --fault-mtbf $FAULT_MTBF --fault-min-batches $FAULT_MIN_BATCHES"
 fi
 
 # Distributed training with DeepSpeed

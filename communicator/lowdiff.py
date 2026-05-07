@@ -13,8 +13,7 @@ import atexit
 class Communicator:
     def __init__(self, model, k=0.01, num_threads=None, save_batch_freq=1,
                  enable_smart_checkpoint=False, save_dir=None, model_name=None, dataset_name=None,
-                 compressor_name=None, compressor_ratio=None, max_full_interval=30, keep_full_checkpoints=3,
-                 max_checkpoint_count=None):
+                 compressor_name=None, compressor_ratio=None, max_full_interval=30, keep_full_checkpoints=3):
         """
         Initialize the Communicator for Top-K gradient compression with async all_gather.
 
@@ -32,23 +31,10 @@ class Communicator:
             compressor_ratio (float): Compressor ratio for checkpoint naming.
             max_full_interval (int): Maximum interval between full checkpoints (from --freq parameter).
             keep_full_checkpoints (int): Number of recent full checkpoints to keep.
-            max_checkpoint_count (int): Maximum checkpoint count in buffer before auto-flush.
-                                       If None, auto-calculated as max_full_interval + 20.
         """
         self.k = k
         self.model = model
         self.compression_data = {}  # Store async work handles and gathered results
-
-        # Auto-calculate max_checkpoint_count based on max_full_interval
-        if max_checkpoint_count is None:
-            max_checkpoint_count = max_full_interval + 20
-            print(f"[DiffCkpt] Auto-calculated max_checkpoint_count={max_checkpoint_count} (max_full_interval={max_full_interval} + 20)")
-        elif max_checkpoint_count < max_full_interval:
-            print(f"[DiffCkpt] WARNING: max_checkpoint_count ({max_checkpoint_count}) < max_full_interval ({max_full_interval})")
-            print(f"[DiffCkpt] This may cause data loss if training crashes. Adjusting to {max_full_interval + 20}")
-            max_checkpoint_count = max_full_interval + 20
-
-        self.max_checkpoint_count = max_checkpoint_count
 
         # Smart Checkpoint Management
         self.enable_smart_checkpoint = enable_smart_checkpoint
@@ -64,7 +50,8 @@ class Communicator:
                 compressor=compressor_name,
                 ratio=compressor_ratio,
                 max_full_interval=max_full_interval,
-                keep_full_checkpoints=keep_full_checkpoints
+                keep_full_checkpoints=keep_full_checkpoints,
+                save_batch_freq=save_batch_freq
             )
             print(f"[SmartCkpt] Smart checkpoint management ENABLED (max_interval={max_full_interval}, keep={keep_full_checkpoints})")
 
@@ -83,8 +70,7 @@ class Communicator:
             self.queue = mp.Queue()
             # 传递内存监控参数到后台进程
             self.save_process = mp.Process(target=diff_ckpt_saver,
-                                          args=(self.queue, self.save_batch_freq,
-                                                self.max_checkpoint_count))
+                                args=(self.queue, self.save_batch_freq))
             self.save_process.start()
             print("save process start!")
 
@@ -153,80 +139,6 @@ class Communicator:
         total_norm = total_norm ** 0.5
         return total_norm
 
-    def should_save_full_checkpoint(self, iteration, epoch, loss):
-        """
-        决策是否保存全量检查点（智能检查点管理）
-
-        Args:
-            iteration: 当前batch索引
-            epoch: 当前epoch
-            loss: 当前loss值
-
-        Returns:
-            (should_save, reason): 是否保存及原因
-        """
-        if not self.enable_smart_checkpoint or self.smart_ckpt_manager is None:
-            return False, 'smart_checkpoint_disabled'
-
-        # 注意：grad_norm参数已被移除，不再基于梯度范数做决策
-        return self.smart_ckpt_manager.should_save_full_checkpoint(iteration, epoch, loss)
-
-    def cleanup_old_full_checkpoints(self):
-        """清理旧的全量检查点"""
-        if self.enable_smart_checkpoint and self.smart_ckpt_manager is not None:
-            self.smart_ckpt_manager.cleanup_old_full_checkpoints()
-
-    def cleanup_old_checkpoints(self, current_iteration, epoch):
-        """清理旧的差分检查点"""
-        if self.enable_smart_checkpoint and self.smart_ckpt_manager is not None:
-            self.smart_ckpt_manager.cleanup_old_diff_checkpoints(current_iteration, epoch)
-
-    def flush_diff_checkpoints_to_disk(self):
-        """
-        手动触发将CPU内存buffer中的差分检查点批量写入磁盘
-
-        用途：
-        - 异常检测触发时立即保存
-        - CPU内存压力过高时释放内存
-        - 达到固定间隔时定期保存
-
-        Returns:
-            bool: 是否成功发送flush命令
-        """
-        if dist.get_rank() == 0:
-            try:
-                self.queue.put('FLUSH')
-                print("[Communicator] Flush command sent to diff_ckpt_saver")
-                return True
-            except Exception as e:
-                print(f"[Communicator] Failed to send flush command: {e}")
-                return False
-        return False
-
-    def clear_buffer_before(self, iteration):
-        """
-        清理buffer中早于指定iteration的过期差分检查点
-
-        用途：
-        - 全量检查点保存后，清理已过期的差分检查点
-        - 释放内存，避免无用数据占用
-
-        Args:
-            iteration: 全量检查点的iteration，早于此的差分检查点将被清理
-
-        Returns:
-            bool: 是否成功发送清理命令
-        """
-        if dist.get_rank() == 0:
-            try:
-                self.queue.put(f'CLEAR_BEFORE:{iteration}')
-                return True
-            except Exception as e:
-                print(f"[Communicator] Failed to send clear command: {e}")
-                return False
-        return False
-
-
     def decompress_save(self, diff, filename, i):
         """
         Parallel gradient restoration.
@@ -262,7 +174,7 @@ class Communicator:
                 # 避免后台进程在 CUDA driver 关闭后仍试图访问 GPU
                 diff_cpu = _to_cpu(self.diff_ckpt)
                 self.queue.put((diff_cpu, filename, i))
-            # 无论后台进程是否存活，都重置 diff_ckpt 避免 GPU tensor 引用堆积
+            # 保持与论文原始实现一致：每次发送后清空当前 diff_ckpt
             self.diff_ckpt = {}
 
     def _cleanup_save_process(self):
@@ -286,14 +198,13 @@ class Communicator:
         self.executor.shutdown(wait=True)
         self._cleanup_save_process()
 
-def diff_ckpt_saver(queue, save_batch_freq, max_checkpoint_count=50):
+def diff_ckpt_saver(queue, save_batch_freq):
     """
     Background process that saves compressed gradients to disk.
 
     Args:
         queue (mp.Queue): Queue receiving data to be saved.
-        save_batch_freq (int): Legacy parameter, kept for compatibility.
-        max_checkpoint_count (int): Maximum checkpoint count before auto-flush.
+        save_batch_freq (int): Save frequency in terms of batch steps.
     """
     import sys
     import signal
@@ -304,24 +215,24 @@ def diff_ckpt_saver(queue, save_batch_freq, max_checkpoint_count=50):
     sys.stderr.flush()
 
     def flush_buffer():
-        """Flush buffer to disk"""
+        """Flush current batch_buffer to disk (best effort)."""
         nonlocal batch_buffer
         if not batch_buffer:
-            return batch_buffer
-
+            return
         try:
             begin = time.time()
             iterations = sorted(batch_buffer.keys())
-            filename = batch_buffer[iterations[0]][1].replace(f'_{iterations[0]}_', f'_{iterations[0]}-{iterations[-1]}_')
-            # Disable mmap to prevent "Cannot allocate memory" error
-            torch.save(batch_buffer, filename, _use_new_zipfile_serialization=False)
-            sys.stderr.write(f"[DiffCkpt] Flushed {len(batch_buffer)} checkpoints: {os.path.basename(filename)} ({time.time()-begin:.3f}s)\n")
+            filename = batch_buffer[iterations[0]][1]
+            torch.save(batch_buffer, filename)
+            sys.stderr.write(
+                f"[DiffCkpt] Flushed {len(batch_buffer)} checkpoints: {os.path.basename(filename)} ({time.time()-begin:.3f}s)\n"
+            )
             sys.stderr.flush()
-            batch_buffer = {}
         except Exception as e:
             sys.stderr.write(f"[DiffCkpt] ERROR: Failed to flush buffer: {e}\n")
             sys.stderr.flush()
-        return batch_buffer
+        finally:
+            batch_buffer = {}
 
     def emergency_flush():
         """Emergency flush on signal or exception"""
@@ -341,28 +252,6 @@ def diff_ckpt_saver(queue, save_batch_freq, max_checkpoint_count=50):
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    def _buffer_size_mb(buf):
-        """计算 batch_buffer 中所有 tensor 的内存占用（MB）"""
-        def _tensor_bytes(obj):
-            if isinstance(obj, torch.Tensor):
-                return obj.numel() * obj.element_size()
-            elif isinstance(obj, dict):
-                return sum(_tensor_bytes(v) for v in obj.values())
-            elif isinstance(obj, (list, tuple)):
-                return sum(_tensor_bytes(v) for v in obj)
-            return 0
-        total = sum(_tensor_bytes(diff) for diff, _ in buf.values())
-        return total / (1024 ** 2)
-
-    def check_and_flush():
-        """Auto-flush when checkpoint count exceeds threshold"""
-        if not batch_buffer:
-            return
-        if len(batch_buffer) >= max_checkpoint_count:
-            sys.stderr.write(f"[DiffCkpt] Auto-flush: count {len(batch_buffer)} >= {max_checkpoint_count}\n")
-            sys.stderr.flush()
-            flush_buffer()
-
     try:
         while True:
             data = queue.get()
@@ -375,27 +264,20 @@ def diff_ckpt_saver(queue, save_batch_freq, max_checkpoint_count=50):
 
             # Flush command: write all buffered checkpoints to disk
             if isinstance(data, str) and data == 'FLUSH':
-                batch_buffer = flush_buffer()
+                flush_buffer()
                 continue
 
             # Clear command: remove checkpoints before specified iteration
             if isinstance(data, str) and data.startswith('CLEAR_BEFORE:'):
                 try:
-                    clear_iteration = int(data.split(':')[1])
+                    parts = data.split(':')
+                    clear_iteration = int(parts[1])
                     before_count = len(batch_buffer)
-                    before_mb = _buffer_size_mb(batch_buffer)
-
-                    # Remove checkpoints with iteration < clear_iteration
                     batch_buffer = {k: v for k, v in batch_buffer.items() if k >= clear_iteration}
-
-                    cleared_count = before_count - len(batch_buffer)
-                    after_mb = _buffer_size_mb(batch_buffer)
-
-                    if cleared_count > 0:
+                    cleared = before_count - len(batch_buffer)
+                    if cleared > 0:
                         sys.stderr.write(
-                            f"[DiffCkpt] Cleared {cleared_count} expired checkpoints before iter {clear_iteration} "
-                            f"({before_mb:.1f}MB -> {after_mb:.1f}MB), "
-                            f"remaining: {len(batch_buffer)} checkpoints\n"
+                            f"[DiffCkpt] Cleared {cleared} buffered checkpoints before iter {clear_iteration}\n"
                         )
                         sys.stderr.flush()
                 except Exception as e:
@@ -403,16 +285,26 @@ def diff_ckpt_saver(queue, save_batch_freq, max_checkpoint_count=50):
                     sys.stderr.flush()
                 continue
 
-            # Normal checkpoint data: compress types then buffer
+            # Normal checkpoint data
             diff, filename, i = data
-            diff_compressed = _compress_diff(diff)
-            batch_buffer[i] = (diff_compressed, filename)
-            if len(batch_buffer) % 10 == 0:
-                sys.stderr.write(
-                    f"[DiffCkpt] Buffered iter {i}: count={len(batch_buffer)}, size={_buffer_size_mb(batch_buffer):.1f}MB\n"
-                )
+            diff = _compress_diff(diff)
+
+            if save_batch_freq == 1:
+                begin = time.time()
+                torch.save(diff, filename)
+                end = time.time()
+                now = datetime.datetime.now()
+                sys.stderr.write(f"[DiffCkpt] Saved {os.path.basename(filename)} ({end - begin:.3f}s) at {now}\n")
                 sys.stderr.flush()
-                check_and_flush()
+            else:
+                batch_buffer[i] = diff
+                if i % save_batch_freq == save_batch_freq - 1:
+                    begin = time.time()
+                    torch.save(batch_buffer, filename)
+                    end = time.time()
+                    sys.stderr.write(f"[DiffCkpt] Saved {os.path.basename(filename)} ({end - begin:.3f}s)\n")
+                    sys.stderr.flush()
+                    batch_buffer = {}
 
 
 
@@ -477,8 +369,4 @@ def _compress_diff(data):
         return tuple(_compress_diff(v) for v in data)
     else:
         return data
-
-
-
-
 
