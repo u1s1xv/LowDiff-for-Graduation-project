@@ -67,7 +67,7 @@ class Communicator:
         if dist.get_rank() == 0:
             self.save_batch_freq = save_batch_freq
             self.diff_ckpt = {}
-            self.queue = mp.Queue()
+            self.queue = mp.Queue(maxsize=4)
             # 传递内存监控参数到后台进程
             self.save_process = mp.Process(target=diff_ckpt_saver,
                                 args=(self.queue, self.save_batch_freq))
@@ -172,7 +172,7 @@ class Communicator:
             else:
                 # 在主进程做 CPU 转换，确保后台进程收到的全是 CPU tensor
                 # 避免后台进程在 CUDA driver 关闭后仍试图访问 GPU
-                diff_cpu = _to_cpu(self.diff_ckpt)
+                diff_cpu = _to_cpu_compressed(self.diff_ckpt)
                 self.queue.put((diff_cpu, filename, i))
             # 保持与论文原始实现一致：每次发送后清空当前 diff_ckpt
             self.diff_ckpt = {}
@@ -285,9 +285,8 @@ def diff_ckpt_saver(queue, save_batch_freq):
                     sys.stderr.flush()
                 continue
 
-            # Normal checkpoint data
+            # Normal checkpoint data (already compressed by main process)
             diff, filename, i = data
-            diff = _compress_diff(diff)
 
             if save_batch_freq == 1:
                 begin = time.time()
@@ -325,48 +324,31 @@ def diff_ckpt_saver(queue, save_batch_freq):
         sys.stderr.write("[DiffCkpt] Background process terminated\n")
         sys.stderr.flush()
 
-def _to_cpu(data):
+def _to_cpu_compressed(data):
     """
-    Move tensor to CPU and return
-    """
-    if hasattr(data, 'cpu'):
-        cpu_data = data.cpu().clone()
-        return cpu_data
-    elif isinstance(data, dict):
-        return {k: _to_cpu(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [_to_cpu(v) for v in data]
-    elif isinstance(data, tuple):
-        return tuple(_to_cpu(v) for v in data)
-    else:
-        return data
-
-def _compress_diff(data):
-    """
-    Compress diff_ckpt types to reduce memory usage:
-    - float32 values  -> float16 (halves memory)
-    - int64  indices  -> int32   (halves memory, safe for GPT-2 layer sizes)
-    - moves tensors to CPU in the process
-    Operates recursively on dict / list / tuple.
-    Falls back to plain CPU copy if CUDA is unavailable (e.g. driver shutting down).
+    CPU transfer + type compression in one pass.
+    Type conversion is done on CPU to avoid per-tensor GPU memory allocation
+    overhead (diff_ckpt contains ~1200 small tensors, each .half() on GPU
+    would trigger a cudaMalloc).
+    - float32 → CPU → float16
+    - int64   → CPU → int32
     """
     if isinstance(data, torch.Tensor):
         try:
-            if data.dtype == torch.float32:
-                return data.half().cpu()
-            elif data.dtype == torch.int64:
-                return data.to(torch.int32).cpu()
+            cpu_data = data.cpu()
+            if cpu_data.dtype == torch.float32:
+                return cpu_data.half()
+            elif cpu_data.dtype == torch.int64:
+                return cpu_data.to(torch.int32)
             else:
-                return data.cpu()
+                return cpu_data
         except Exception:
-            # CUDA driver may be shutting down; return as-is and let torch.save handle it
             return data
     elif isinstance(data, dict):
-        return {k: _compress_diff(v) for k, v in data.items()}
+        return {k: _to_cpu_compressed(v) for k, v in data.items()}
     elif isinstance(data, list):
-        return [_compress_diff(v) for v in data]
+        return [_to_cpu_compressed(v) for v in data]
     elif isinstance(data, tuple):
-        return tuple(_compress_diff(v) for v in data)
+        return tuple(_to_cpu_compressed(v) for v in data)
     else:
         return data
-
